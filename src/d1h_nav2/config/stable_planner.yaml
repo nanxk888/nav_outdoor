@@ -1,0 +1,13 @@
+stable_planner:
+  ros__parameters:
+    use_sim_time: true
+    global_period_sec: 1.0
+    local_period_sec: 0.2
+    local_refresh_remaining_m: 3.5
+    local_goal_shift_m: 0.03
+    max_path_deviation_m: 0.5
+    validation_timeout_sec: 0.3
+    handover_timeout_sec: 6.0
+    braking_decel_mps2: 0.5
+    reaction_time_sec: 0.4
+    stop_margin_m: 0.25

@@ -1,0 +1,66 @@
+/**:
+  ros__parameters:
+    use_sim_time: false
+    common:
+      lid_topic: /livox/lidar
+      imu_topic: /livox/imu
+      img_topic: /navigation/unused_image
+      img_en: 0
+      lidar_en: 1
+      livox_msg_type: livox_ros_driver2
+      ros_driver_bug_fix: false
+    extrin_calib:
+      # Retained from user's working sensor rig; NOT base_link mounting calibration.
+      extrinsic_T: [0.04165, 0.02326, -0.0284]
+      extrinsic_R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+      Rcl: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+      Pcl: [0.0, 0.0, 0.0]
+    time_offset:
+      imu_time_offset: 0.0
+      lidar_time_offset: 0.0
+      img_time_offset: 0.0
+    preprocess:
+      # This fork uses AVIA=1 for the Livox CustomMsg decoder, including MID360.
+      lidar_type: 1
+      scan_line: 4
+      point_filter_num: 1
+      filter_size_surf: 0.15
+      blind: 0.8
+    imu:
+      imu_en: true
+      imu_int_frame: 50
+      gravity_est_en: true
+      ba_bg_est_en: true
+      acc_cov: 0.5
+      gyr_cov: 0.3
+    lio:
+      max_iterations: 5
+      dept_err: 0.02
+      beam_err: 0.05
+      min_eigen_value: 0.0025
+      voxel_size: 0.5
+      max_layer: 2
+      max_points_num: 50
+      layer_init_num: [5, 5, 5, 5, 5]
+    local_map:
+      map_sliding_en: true
+      half_map_size: 20
+      sliding_thresh: 2.0
+    uav:
+      gravity_align_en: true
+      imu_rate_odom: false
+    publish:
+      dense_map_en: false
+      pub_effect_point_en: false
+      pub_plane_en: false
+    pcd_save:
+      pcd_save_en: false
+      colmap_output_en: false
+    image_save:
+      img_save_en: false
+    evo:
+      pose_output_en: false
+    navigation:
+      odom_frame: lio_odom
+      imu_frame: lio_imu
+      max_age_sec: 0.5

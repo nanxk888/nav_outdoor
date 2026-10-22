@@ -1,0 +1,8 @@
+{
+  "survey_confirmed": false,
+  "osm_file": "/mnt/e/nav_n/map/xd_map.osm",
+  "datum_latitude_deg": 34.125,
+  "datum_longitude_deg": 108.829,
+  "minimum_road_width_m": 0.0,
+  "approved_way_ids": []
+}

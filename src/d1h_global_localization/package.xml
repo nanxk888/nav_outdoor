@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>d1h_global_localization</name>
+  <version>0.1.0</version>
+  <description>GPS, IMU, and local-odometry fusion for D1H navigation.</description>
+  <maintainer email="dev@example.com">nav_n</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+  <depend>ament_index_python</depend>
+  <depend>geometry_msgs</depend>
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+  <depend>rclpy</depend>
+  <depend>robot_localization</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>tf2_ros</depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+
+  <export><build_type>ament_python</build_type></export>
+</package>

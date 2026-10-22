@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>d1h_nav2</name>
+  <version>0.1.0</version>
+  <description>Georeferenced Nav2 navigation and safe command bridge for D1H.</description>
+  <maintainer email="dev@example.com">nav_n</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <depend>ament_index_python</depend>
+  <depend>geometry_msgs</depend>
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+  <depend>nav2_bringup</depend>
+  <depend>nav2_lifecycle_manager</depend>
+  <depend>nav2_map_server</depend>
+  <depend>nav2_msgs</depend>
+  <depend>nav2_smac_planner</depend>
+  <depend>nav2_common</depend>
+  <depend>nav2_rotation_shim_controller</depend>
+  <depend>nav2_regulated_pure_pursuit_controller</depend>
+  <depend>nav_msgs</depend>
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <exec_depend>d1h_navigation_description</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>gazebo_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <export><build_type>ament_python</build_type></export>
+</package>

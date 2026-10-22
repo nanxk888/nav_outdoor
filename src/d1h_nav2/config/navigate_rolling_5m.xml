@@ -1,0 +1,67 @@
+<!-- Global validity at 1Hz; rolling local target and validity at 5Hz.
+     Safe global routes are retained; moving local endpoints are refreshed.
+     Local FollowPath completion must NOT complete the final navigation goal. -->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="3" name="RollingNavigationRecovery">
+      <PipelineSequence name="GlobalRouteAndRollingLocalControl">
+        <RateController hz="1.0">
+          <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"
+            server_name="/navigation/compute_global_path"/>
+        </RateController>
+        <RateController hz="5.0">
+          <RecoveryNode number_of_retries="1" name="RefreshGlobalIfLocalTargetBlocked">
+          <Sequence>
+            <TruncatePathLocal input_path="{path}" output_path="{reference_path}"
+              distance_forward="5.0" distance_backward="0.3" robot_frame="base_link"
+              angular_distance_weight="0.0" transform_tolerance="0.25"/>
+            <GetPoseFromPath path="{reference_path}" pose="{local_goal}" index="-1"/>
+            <ComputePathToPose goal="{local_goal}" path="{local_path}" planner_id="LocalGrid"
+              server_name="/navigation/compute_local_path"/>
+          </Sequence>
+          <Sequence>
+            <!-- Safe-prefix continuation is managed by StablePlanner; no
+                 unconditional one-second pause during normal path handover. -->
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"
+              server_name="/navigation/compute_global_path"/>
+          </Sequence>
+          </RecoveryNode>
+        </RateController>
+        <ReactiveFallback name="FinishOnlyAtFinalGoal">
+          <Sequence name="FinalPositionAndOrientation">
+            <GoalReached goal="{goal}" global_frame="map" robot_base_frame="base_link"/>
+            <FollowPath path="{local_path}" controller_id="FollowPath"/>
+          </Sequence>
+          <KeepRunningUntilFailure>
+            <FollowPath path="{local_path}" controller_id="FollowPath"/>
+          </KeepRunningUntilFailure>
+        </ReactiveFallback>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoverOrAcceptNewGoal">
+        <GoalUpdated/>
+        <RoundRobin name="BoundedEscapeAttempts">
+          <Sequence name="TurnAroundAndReplan">
+            <!-- Turn around using behavior_server's live lidar costmap.
+                 Try this before blind reverse into the tilted lidar's rear. -->
+            <Spin spin_dist="3.141593" time_allowance="15.0"/>
+            <ClearEntireCostmap service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap service_name="/local_planner/global_costmap/clear_entirely_global_costmap"/>
+            <Wait wait_duration="1.0"/>
+          </Sequence>
+          <Sequence name="TryOppositeTurnIfBlocked">
+            <Spin spin_dist="-3.141593" time_allowance="15.0"/>
+            <ClearEntireCostmap service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap service_name="/local_planner/global_costmap/clear_entirely_global_costmap"/>
+            <Wait wait_duration="1.0"/>
+          </Sequence>
+          <Sequence name="BackOffWhenBothTurnsBlocked">
+            <BackUp backup_dist="0.30" backup_speed="0.12" time_allowance="6.0"/>
+            <ClearEntireCostmap service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap service_name="/local_planner/global_costmap/clear_entirely_global_costmap"/>
+            <Wait wait_duration="1.0"/>
+          </Sequence>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

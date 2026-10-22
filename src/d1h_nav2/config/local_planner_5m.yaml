@@ -1,0 +1,64 @@
+/**:
+  ros__parameters:
+    use_sim_time: true
+
+local_planner:
+  planner_server:
+    ros__parameters:
+      expected_planner_frequency: 5.0
+      planner_plugins: [LocalGrid]
+      LocalGrid:
+        plugin: nav2_smac_planner/SmacPlanner2D
+        tolerance: 0.3
+        allow_unknown: false
+        downsample_costmap: false
+        cost_travel_multiplier: 3.0
+        max_planning_time: 0.3
+        smoother:
+          # Smooth in the laser obstacle costmap, not just for visualization.
+          max_iterations: 1000
+          w_smooth: 0.3
+          w_data: 0.2
+          tolerance: 1.0e-10
+          do_refinement: true
+  global_costmap:
+    global_costmap:
+      ros__parameters:
+        global_frame: map
+        robot_base_frame: base_link
+        rolling_window: true
+        width: 12
+        height: 12
+        resolution: 0.10
+        robot_radius: 0.32
+        track_unknown_space: false
+        update_frequency: 10.0
+        publish_frequency: 5.0
+        transform_tolerance: 0.25
+        always_send_full_costmap: true
+        plugins: [obstacle_layer, inflation_layer]
+        obstacle_layer:
+          plugin: nav2_costmap_2d::ObstacleLayer
+          observation_sources: livox livox_clear
+          livox:
+            topic: /livox/lidar/pointcloud_nav
+            sensor_frame: lidar_link
+            data_type: PointCloud2
+            marking: true
+            clearing: false
+            obstacle_max_range: 5.0
+            obstacle_min_range: 0.60
+            min_obstacle_height: 0.03
+            max_obstacle_height: 0.9
+          livox_clear:
+            topic: /livox/lidar/pointcloud_clear
+            sensor_frame: lidar_link
+            data_type: PointCloud2
+            marking: false
+            clearing: true
+            raytrace_max_range: 6.0
+            raytrace_min_range: 0.45
+        inflation_layer:
+          plugin: nav2_costmap_2d::InflationLayer
+          cost_scaling_factor: 4.0
+          inflation_radius: 0.65

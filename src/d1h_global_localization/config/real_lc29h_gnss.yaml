@@ -1,0 +1,18 @@
+real_gnss_gate:
+  ros__parameters:
+    use_sim_time: false
+    input_topic: /hardware/gnss/fix
+    max_age_sec: 1.5
+    future_tolerance_sec: 0.1
+    # Conservative initial assumptions, NOT measured LC29H accuracy.
+    minimum_std_m: 1.0
+    maximum_horizontal_std_m: 10.0
+    allow_unknown_covariance: false
+    fallback_std_m: 5.0
+    maximum_robot_speed_mps: 2.0
+    jump_margin_m: 10.0
+    # Leave disabled until datum agrees with the reviewed OSM deployment profile.
+    enable_enu_preview: false
+    datum_confirmed: false
+    datum_latitude_deg: 0.0
+    datum_longitude_deg: 0.0
