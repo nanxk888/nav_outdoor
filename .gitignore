@@ -38,6 +38,7 @@ log/
 !/scripts/test_station_keep.py
 !/scripts/test_stable_planner.py
 !/scripts/navigation_web.py
+!/scripts/launch_real_workspace.sh
 !/scripts/navigation_control.py
 !/scripts/robot_wire.py
 !/scripts/robot_udp_receiver.py
@@ -47,12 +48,14 @@ log/
 !/docs/navigation_web.md
 !/docs/robot_control.md
 !/map/robot_control.example.json
+!/map/gnss_bridge.yaml
 !/web/
 !/map/
 /map/*
 !/map/xd_map.osm
 !/map/real_osm_profile.example.json
 !/map/robot_control.example.json
+!/map/gnss_bridge.yaml
 !/src/
 /src/*
 !/src/d1h_fast_lio/

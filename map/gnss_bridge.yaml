@@ -1,0 +1,8 @@
+name: nxk_gnss_96_to_0
+from_domain: 96
+to_domain: 0
+topics:
+  /hardware/gnss/fix:
+    type: sensor_msgs/msg/NavSatFix
+  /lc29h_gnss/health:
+    type: diagnostic_msgs/msg/DiagnosticArray

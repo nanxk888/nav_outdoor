@@ -55,6 +55,9 @@ source install/local_setup.bash
 
 ## 分模块启动
 
+统一启动LIO、GPS桥接、GPS门控和网页：`bash scripts/launch_real_workspace.sh`。
+需先构建安装新增launch并保持外部硬件驱动运行，详见 [统一启动说明](docs/navigation_web.md)。默认机器人控制禁用，不启动导航或融合。
+
 传感器由现有驱动独立启动。本仓库不会清理进程、改网卡或启动机器人运动。
 三个命令分别使用独立终端、加载同一ROS通信环境；它们**不是**已经接通的自主导航四终端流程。
 
