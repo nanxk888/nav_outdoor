@@ -5,6 +5,9 @@ source /opt/ros/humble/setup.bash
 source install/local_setup.bash
 # All ROS fixtures are isolated from the live sensor / control domains.
 export ROS_DOMAIN_ID=94
+python3 scripts/test_robot_wire.py
+python3 scripts/test_navigation_control.py
+python3 scripts/test_navigation_web.py
 python3 scripts/test_gnss_quality.py
 python3 scripts/test_osm_roads.py
 python3 scripts/test_obstacle_memory.py

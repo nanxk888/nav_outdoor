@@ -3,8 +3,8 @@
 面向 NVIDIA AGX Orin / Ubuntu 22.04 / ROS 2 Humble：复用 FAST-LIVO2 的雷达＋IMU里程计，接入 LC29H GPS，并在 OSM 道路网络上全局选路、利用雷达进行局部避障。
 
 **当前是分模块部署与验证版本，不是已经完成真机自主导航的交付版本。**
-GPS＋LIO全局融合、本体外参适配、真实地面处理及安全控制接入尚未完成。
-规划入口只发布候选速度，不连接电机。禁止直接用于无人值守运行。
+GPS＋LIO全局融合、本体外参适配、真实地面处理及安全监督尚未完成。
+规划入口只发布候选速度；新增的网页/UDP控制适配默认禁用、未实机验收。禁止直接用于无人值守运行。
 
 ## 部署文档
 
@@ -12,9 +12,11 @@ GPS＋LIO全局融合、本体外参适配、真实地面处理及安全控制�
 
 | 模块 | 文档 | 当前状态 |
 |---|---|---|
-| 专用纯LIO里程计 | [navigation_lio.md](docs/navigation_lio.md) | 本地构建、数学回归及静态合成输入通过；未在Orin实测 |
+| 专用纯LIO里程计 | [navigation_lio.md](docs/navigation_lio.md) | Orin真实输入约10Hz、五分钟静止首尾差约2.17mm；运动精度待验收 |
 | LC29H GPS接入 | [real_gnss.md](docs/real_gnss.md) | 质量门控已实现；非GPS＋LIO融合器 |
 | OSM道路规划 | [real_osm_navigation.md](docs/real_osm_navigation.md) | 道路图A*＋五米局部Smac规划＋RPP，尚未真机闭环验收 |
+| 网页工作台 | [navigation_web.md](docs/navigation_web.md) | 本地OSM、GPS、LIO相对轨迹、目标及航向预览；浏览器/Orin联调待验收 |
+| 网线控制适配 | [robot_control.md](docs/robot_control.md) | 配对UDP收发、FSM及Nav2接口；默认禁用，未实机控制验收 |
 
 ## 仓库范围
 
@@ -23,6 +25,7 @@ GPS＋LIO全局融合、本体外参适配、真实地面处理及安全控制�
 - `src/d1h_nav2`：OSM道路规划、局部规划、路径缓存、障碍记忆和RPP配置。
 - `map/xd_map.osm`：西电南校区及周边OSM数据；示例配置默认拒绝启用道路规划。
 - `scripts`：构建、分模块启动和回归检查。
+- `web`：无在线CDN依赖的浏览器工作台；ROS数据通过本机HTTP网关读取，电脑用SSH隧道访问。
 
 两个Python包保留了一些与原工作空间共享的历史仿真/室内辅助模块，以保持包结构完整；
 **这些不是本仓库的部署入口，也不包含运行仿真所需的机器人、场景和模型资产。**
