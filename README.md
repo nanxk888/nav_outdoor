@@ -15,6 +15,7 @@ GPS＋LIO全局融合、本体外参适配、真实地面处理及安全监督�
 | 专用纯LIO里程计 | [navigation_lio.md](docs/navigation_lio.md) | Orin真实输入约10Hz、五分钟静止首尾差约2.17mm；运动精度待验收 |
 | LC29H GPS接入 | [real_gnss.md](docs/real_gnss.md) | 质量门控已实现；非GPS＋LIO融合器 |
 | OSM道路规划 | [real_osm_navigation.md](docs/real_osm_navigation.md) | 道路图A*＋五米局部Smac规划＋RPP，尚未真机闭环验收 |
+| 真机导航点云 | [real_navigation_cloud.md](docs/real_navigation_cloud.md) | 去畸变当前扫描＋受实测高度约束的地面过滤；局部平整地面试验版，默认不启用，未真机验收 |
 | 网页工作台 | [navigation_web.md](docs/navigation_web.md) | 本地OSM、GPS、LIO相对轨迹、目标及航向预览；浏览器/Orin联调待验收 |
 | 网线控制适配 | [robot_control.md](docs/robot_control.md) | UserCommand起立/loco/落下、静止姿态、配对UDP测试器；默认禁用，未实机控制验收 |
 

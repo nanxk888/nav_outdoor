@@ -52,6 +52,8 @@ log/
 !/scripts/start_d1_receiver.sh
 !/scripts/d1_receiver_launcher.py
 !/scripts/test_d1_launcher.py
+!/scripts/test_real_ground.py
+!/scripts/test_real_cloud_ros.py
 !/scripts/robot_udp_receiver.py
 !/scripts/test_robot_wire.py
 !/scripts/test_navigation_control.py
@@ -60,6 +62,7 @@ log/
 !/scripts/test_web_interactions.js
 !/docs/navigation_web.md
 !/docs/robot_control.md
+!/docs/real_navigation_cloud.md
 !/map/robot_control.example.json
 !/map/gnss_bridge.yaml
 !/web/

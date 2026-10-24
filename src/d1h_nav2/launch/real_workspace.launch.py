@@ -56,6 +56,14 @@ def configure(context):
                   parameters=[os.path.join(get_package_share_directory('d1h_global_localization'),'config','real_lc29h_gnss.yaml'),
                               {'use_sim_time':False}],output='screen',respawn=False)
         critical.append(gate)
+    if enabled('with_nav_cloud'):
+        height=float(arg('sensor_height_m'))
+        if not .15<=height<=2.:
+            raise RuntimeError('with_nav_cloud requires measured standing IMU sensor_height_m (0.15..2.0)')
+        cloud=Node(package='d1h_nav2',executable='real_cloud_filter',name='real_navigation_cloud_filter',
+                   parameters=[{'use_sim_time':False,'sensor_height_m':height}],
+                   arguments=['--ros-args','--log-level',arg('log_level')],output='screen')
+        critical.append(cloud)
     if enabled('with_web'):
         web=ExecuteProcess(cmd=[sys.executable,str(root/'scripts/navigation_web.py')],output='screen',
                            additional_env={'NXK_CONTROL_CONFIG':arg('control_config'),
@@ -80,6 +88,8 @@ def generate_launch_description():
         DeclareLaunchArgument('gps_driver_config',default_value='/workspace/d1h-autonomy-final/.local/robot/perception/gnss.yaml'),
         DeclareLaunchArgument('with_gps_bridge',default_value='true'),
         DeclareLaunchArgument('with_lio',default_value='true'),
+        DeclareLaunchArgument('with_nav_cloud',default_value='false'),
+        DeclareLaunchArgument('sensor_height_m',default_value='0.0',description='Measured standing Livox IMU height above local ground, metres'),
         DeclareLaunchArgument('with_gnss_gate',default_value='true'),
         DeclareLaunchArgument('with_web',default_value='true'),
         DeclareLaunchArgument('gps_cyclonedds_xml',default_value='/workspace/d1h-autonomy-final/.local/robot/perception/cyclonedds.xml'),

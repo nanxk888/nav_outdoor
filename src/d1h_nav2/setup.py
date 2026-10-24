@@ -25,6 +25,7 @@ setup(
         'gps_goal_to_enu = d1h_nav2.gps_goal_to_enu:main',
         'global_map_publisher = d1h_nav2.global_map_publisher:main',
         'pointcloud_retime = d1h_nav2.pointcloud_retime:main',
+        'real_cloud_filter = d1h_nav2.real_cloud_filter:main',
         'pose_goal_to_nav = d1h_nav2.pose_goal_to_nav:main',
         'robot_position_marker = d1h_nav2.robot_position_marker:main',
         'spawn_unknown_obstacle = d1h_nav2.spawn_unknown_obstacle:main',

@@ -325,7 +325,7 @@ void LIVMapper::initializeSubscribersAndPublishers(rclcpp::Node::SharedPtr &node
   sub_imu = this->node->create_subscription<sensor_msgs::msg::Imu>(imu_topic, 400, std::bind(&LIVMapper::imu_cbk, this, std::placeholders::_1));
   // No image subscription.
   
-  pubLaserCloudFullRes = this->node->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered", 100);
+  pubLaserCloudFullRes = this->node->create_publisher<sensor_msgs::msg::PointCloud2>("/navigation/lio/deskewed_cloud", 2);
   pubNormal = this->node->create_publisher<visualization_msgs::msg::MarkerArray>("/visualization_marker", 100);
   pubSubVisualMap = this->node->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_visual_sub_map_before", 100);
   pubLaserCloudEffect = this->node->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_effected", 100);
@@ -526,7 +526,7 @@ void LIVMapper::handleVIO()
   //   visual_sub_map->push_back(temp_map);
   // }
 
-  // Registration map is internal only; no world cloud output.
+  // Registration MAP is internal only; the current deskewed scan is optional.
   publish_img_rgb(pubImage, vio_manager);
 
   euler_cur = RotMtoEuler(_state.rot_end);
@@ -1598,6 +1598,16 @@ void LIVMapper::publish_odometry(const rclcpp::Publisher<nav_msgs::msg::Odometry
   odomAftMapped.header.frame_id = navigation_odom_frame;
   odomAftMapped.child_frame_id = navigation_imu_frame;
   pubOdomAftMapped->publish(odomAftMapped);
+  // Current deskewed scan only, never the accumulated registration map.
+  // Preserve the SAME qualified state time/frame as the sensor odometry.
+  if (pubLaserCloudFullRes->get_subscription_count() > 0 && !feats_undistort->empty()) {
+    PointCloudXYZI::Ptr scan_world(new PointCloudXYZI());
+    transformLidar(_state.rot_end, _state.pos_end, feats_undistort, scan_world);
+    sensor_msgs::msg::PointCloud2 scan_msg;
+    pcl::toROSMsg(*scan_world, scan_msg);
+    scan_msg.header = odomAftMapped.header;
+    pubLaserCloudFullRes->publish(scan_msg);
+  }
   navigation_output_time = stamp;
   std_msgs::msg::String status;
   status.data = "{\"state\":\"LIO_SENSOR_TRACKING\",\"base_link_ready\":false,\"measurement_age_sec\":" +

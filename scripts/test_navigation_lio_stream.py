@@ -10,7 +10,7 @@ import time
 import yaml
 import rclpy
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Imu
+from sensor_msgs.msg import Imu,PointCloud2
 from livox_ros_driver2.msg import CustomMsg, CustomPoint
 from std_msgs.msg import String
 
@@ -28,7 +28,8 @@ def main():
         rclpy.init();node=rclpy.create_node('navigation_lio_fixture')
         pc=node.create_publisher(CustomMsg,'/fixture/lidar',4)
         pi=node.create_publisher(Imu,'/fixture/imu',400)
-        odoms=[];states=[];scan_ends=[]
+        odoms=[];states=[];scan_ends=[];scans=[]
+        sc=node.create_subscription(PointCloud2,'/navigation/lio/deskewed_cloud',scans.append,10)
         so=node.create_subscription(Odometry,'/navigation/lio/odometry',odoms.append,10)
         ss=node.create_subscription(String,'/navigation/lio/status',lambda s:states.append(json.loads(s.data)),10)
         geometry=[]
@@ -70,6 +71,10 @@ def main():
                     rclpy.spin_once(node,timeout_sec=.001)
                     time.sleep(.003)
                 assert len(odoms)>=10,(len(odoms),log.read_text())
+                assert len(scans)>=10,('missing deskewed scan outputs',len(scans),log.read_text())
+                assert all(m.header.frame_id=='lio_odom' and m.width*m.height>0 for m in scans)
+                scan_times=[m.header.stamp.sec+m.header.stamp.nanosec/1e9 for m in scans]
+                assert all(min(abs(t-end) for end in scan_ends)<2e-6 for t in scan_times),'Cloud must retain scan-end time'
                 assert states and states[-1]['base_link_ready'] is False
                 times=[m.header.stamp.sec+m.header.stamp.nanosec/1e9 for m in odoms]
                 assert all(b>a for a,b in zip(times,times[1:]))

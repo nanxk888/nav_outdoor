@@ -25,6 +25,8 @@ else
 fi
 python3 scripts/test_gnss_driver_guard.py
 python3 scripts/test_gnss_quality.py
+python3 scripts/test_real_ground.py
+python3 scripts/test_real_cloud_ros.py
 python3 scripts/test_osm_roads.py
 python3 scripts/test_obstacle_memory.py
 python3 scripts/test_station_keep.py
