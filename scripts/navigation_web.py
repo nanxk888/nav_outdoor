@@ -84,12 +84,12 @@ class Handler(BaseHTTPRequestHandler):
                 if not control.status().get('enabled'):
                     raise ValueError('Hardware control configuration is disabled')
                 kind = self.path.rsplit('/',1)[-1]
-                if kind not in ('start','stop','heartbeat','navigate','lower','pose'):
+                if kind not in ('start','stop','heartbeat','navigate','lower','pose','loco'):
                     raise ValueError('invalid control request')
                 if kind=='pose':
                     from robot_policy import posture
                     posture(value,allow_height=True)
-                elif kind=='lower':
+                elif kind in ('lower','loco'):
                     if value!={'confirm_stationary':True}:raise ValueError('Confirm physical standstill first')
                 elif value!={}:raise ValueError('Unexpected fields')
                 if kind == 'navigate':

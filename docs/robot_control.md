@@ -142,7 +142,7 @@ cp map/robot_control.example.json /root/.config/nxk/control.json
 chmod 600 /root/.config/nxk/control.json
 ```
 
-人工审核填写 key_file、实际IP后，只有已完成现场验收才将 hardware_authorized、interfaces_verified 设为 true。`stand_ready_states` 只填写厂家确认的完成反馈；现场目前只观察到 transform_up 状态，未确认有独立完成通知，不能把它当作站稳证明。按操作员要求新增 `stand_loco_delay_sec`，默认4秒（可配4–8秒）。没有已确认的完成状态时，网页在本次起立请求获得对应操作ID的新transform_up反馈、且发送已满4秒后请求loco；反馈缺失、在线检查或浏览器心跳失败均不继续。最终必须收到实际loco反馈才进入READY。定时切换须现场看护，不等同于自动检测站稳。
+人工审核填写 key_file、实际IP后，只有已完成现场验收才将 hardware_authorized、interfaces_verified 设为 true。现场目前只观察到transform_up状态，不能把它当作站稳证明。按操作员最新要求已移除自动切换：起立和loco是两个独立按钮，每次点击仅发送一次对应模式UDP请求，接收端对应发布一次SDK模式命令。后续继续零速度与心跳；丢包或反馈超时不自动重试。旧配置中的stand_loco_delay_sec和stand_ready_states不再用于自动切换。
 
 survey_confirmed 在仅测试站立/姿态时可保留 false；导航仍会被阻止。地图原点、GPS/LIO融合与安全监督验收后才能开启导航相关配置。
 
@@ -152,9 +152,9 @@ cd /workspace/nxk
 bash scripts/launch_real_workspace.sh control_config:=/root/.config/nxk/control.json
 ```
 
-不传 control_config 时仍是默认只读。网页启动流程：握手 → transform_up → 完成反馈或上述4秒定时条件 → loco实际反馈 → READY零速度待命。已在loco则直接接管待命。READY时可设置姿态或确认落下。导航任务中不允许姿态/落下：先停止导航，再启动接管loco待命、显式回正并确认停稳。网页排队成功不代表物理动作成功。
+不传control_config时仍是默认只读。点击起立：握手→单次transform_up→本次新反馈→STAND_READY。操作员现场确认站稳后，另点loco：单次loco→本次新反馈→READY零速度待命。STAND_READY和READY均可确认停稳后落下（单次transform_down）；仅READY可设置姿态/导航。导航中禁止姿态与落下。网页排队成功不代表物理动作成功。
 
-重新点击起立时，若握手后已是transform_up，不再重复请求起立；进入STAND_WAIT保持零速度，重新等待4秒且该状态有效后请求loco。不是起立完成检测，仍须现场确认稳定。已确认的本次起立操作也只保持零速度等待，不重复请求模式。处于transform_down或其他未支持状态时拒绝起立，不打断落下。
+重新点击起立时，若握手后已是transform_up，不重复请求起立，直接进入STAND_READY等待人工点击loco；若已在loco则只接管零速度待命。处于transform_down或其他未支持状态时拒绝起立，不打断落下。模式超时后停止会话，不自动重试，重新操作前先检查实机状态。
 
 FSM每次事件变化有0.3秒历史整理窗口；Python在不超过0.5秒、过滤器在线且源时间戳有效时保持会话，但FSM为空并禁止非零速度。超过窗口仍无有效状态即撤销。这修复了落下后进入idle时整理窗口被误判为失联、导致nonce轮换的可能原因；具体实机报错仍需更新后复测，不视为已完成落下协议验收。
 
