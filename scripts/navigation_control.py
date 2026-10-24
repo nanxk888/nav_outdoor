@@ -26,6 +26,7 @@ class Control:
         self.goal_handle = None; self.pending = False; self.generation = 0
         self.config = None; self.sock = None
         self.pose = None
+        self.batteries={};self.battery_time=0.;self.battery_query_time=-100.
         filename = os.environ.get('NXK_CONTROL_CONFIG')
         if not filename: return
         self.config = json.loads(Path(filename).read_text())
@@ -145,6 +146,8 @@ class Control:
                     # Only accept replies to packets sent recently, not old statuses.
                     if type(r.get('reply_to')) is not int or not 0 <= self.seq-r['reply_to'] <= 12: continue
                     self.robot = r; self.robot_time = now; self.nonce = r['nonce']
+                    if 'batteries' in r:
+                        self.batteries=r['batteries'];self.battery_time=now
                     if r.get('command_accepted') is False and self.phase not in ('IDLE','STOPPED','DISABLED'):
                         self.stop('Receiver rejected command: '+r.get('rejection',''))
                 except (ValueError, KeyError, TypeError): continue
@@ -179,6 +182,8 @@ class Control:
                         posture(value,self.robot.get('height_enabled',False));self.pose=dict(value)
                         self.reason='Posture request pending receiver confirmation'
                 except (ValueError, KeyError) as exc: self.reason = str(exc)
+            if now-getattr(self,'battery_query_time',-100.)>=60:
+                self.send('battery');self.battery_query_time=now
             active = self.phase not in ('IDLE','STOPPED','DISABLED')
             if active and (now-self.browser>2. or now-self.robot_time>.3):
                 self.stop('Browser/robot heartbeat timeout'); active = False
@@ -242,7 +247,9 @@ class Control:
     def status(self):
         return {'phase': self.phase, 'reason': self.reason, 'navigation_safe': self.safe(),
                 'robot': self.robot, 'robot_receive_age_sec': time.monotonic()-self.robot_time,
-                'enabled': self.sock is not None}
+                'enabled': self.sock is not None,
+                'batteries':getattr(self,'batteries',{}),
+                'battery_receive_age_sec':time.monotonic()-self.battery_time if getattr(self,'battery_time',0) else None}
 
     def close(self):
         if self.sock:

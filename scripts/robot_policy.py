@@ -4,6 +4,13 @@ import secrets
 from robot_wire import velocity
 
 
+def battery_values(percentage, voltage, present):
+    """BatteryState percentage is 0..1, not 0..100; invalid values stay unknown."""
+    return {'present':bool(present),
+            'percent':round(percentage*100,1) if present and math.isfinite(percentage) and 0<=percentage<=1 else None,
+            'voltage':round(voltage,2) if present and math.isfinite(voltage) and voltage>0 else None}
+
+
 def valid_fsm_event(event, online, required_source_ns, now):
     """Require a settled writer history and a post-command DDS source timestamp."""
     return bool(online and event is not None and now-event[2]>.3 and event[1]>required_source_ns)
@@ -49,7 +56,7 @@ class ReceiverPolicy:
     def accept(self, data, now):
         if data.get('protocol')!=2: raise ValueError('requires paired protocol v2')
         kind=data.get('kind')
-        if kind=='hello': return
+        if kind in ('hello','battery'): return
         if data.get('nonce')!=self.nonce or type(data.get('seq')) is not int:
             raise ValueError('nonce/sequence mismatch')
         mode=data.get('mode','');op=data.get('operation')

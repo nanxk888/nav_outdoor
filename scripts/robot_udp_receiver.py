@@ -9,9 +9,11 @@ import rclpy
 from rcl_interfaces.srv import GetParameters
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
+from sensor_msgs.msg import BatteryState
+from rclpy.qos import qos_profile_sensor_data
 from ddt_msgs.msg import UserCommand
 from robot_wire import encode, decode
-from robot_policy import ReceiverPolicy
+from robot_policy import ReceiverPolicy,battery_values
 
 
 def main():
@@ -30,6 +32,14 @@ def main():
     if len(key)<32: raise SystemExit('Shared key must contain at least 32 bytes')
     rclpy.init();node=rclpy.create_node('nxk_robot_receiver')
     policy=ReceiverPolicy(args.authorize_motion,args.allow_pose,args.allow_height)
+    batteries={}
+    def battery_callback(name,msg):
+        value=battery_values(msg.percentage,msg.voltage,msg.present)
+        stamp=msg.header.stamp.sec+msg.header.stamp.nanosec/1e9
+        value.update(received=time.monotonic(),source_age_sec=max(0.,time.time()-stamp) if stamp>0 else None)
+        batteries[name]=value
+    battery_subs=[node.create_subscription(BatteryState,f'/{ns}/system_status_broadcaster/{name}',
+        lambda msg,name=name:battery_callback(name,msg),qos_profile_sensor_data) for name in ('battery1','battery2')]
     pub=node.create_publisher(UserCommand,f'/{ns}/command/user_command',1)
     topic='/nxk_receiver/fsm_status'
     bridge={};bridge_time=-100.;identity=None
@@ -111,6 +121,12 @@ def main():
                                                                command_accepted=not error,rejection=error)
             state.update(fsm_valid=valid,fsm_event_age_sec=bridge.get('event_age_sec'),
                          fsm_semantics='latched_state_with_controller_service_check',controllers_online=online)
+            if data.get('kind')=='battery':
+                state['batteries']={}
+                for name,value in batteries.items():
+                    age=time.monotonic()-value['received']
+                    state['batteries'][name]={k:v for k,v in value.items() if k!='received'}
+                    state['batteries'][name].update(age_sec=age,stale=age>90 or (value['source_age_sec'] is not None and value['source_age_sec']+age>90))
             sock.sendto(encode(state,key),addr)
         command,mode=policy.tick(time.monotonic())
         if args.authorize_motion:publish(command,mode)

@@ -37,7 +37,12 @@ class ControlTests(unittest.TestCase):
         c.robot={'fsm':'loco','fsm_fresh':True,'fault':False,'authorized':True};c.nonce='x'
         c.goal_handle=None;c.generation=0;c.pending=False;c.seq=0;c.safety={};c.safety_time=0
         c.sent=[];c.send=lambda *args,**kwargs:c.sent.append((args,kwargs))
+        c.battery_query_time=time.monotonic()
         return c
+
+    def test_battery_queries_once_per_minute(self):
+        c=self.instance('IDLE');c.battery_query_time-=61;c.tick();c.tick()
+        self.assertEqual(sum(args==('battery',) for args,_ in c.sent),1)
 
     def test_disabled_without_config(self):
         with patch.dict(os.environ,{},clear=True): c=Control(object())

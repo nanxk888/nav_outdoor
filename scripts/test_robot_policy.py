@@ -1,9 +1,14 @@
 """No ROS/hardware: receive-side motion state regression."""
 import unittest
-from robot_policy import ReceiverPolicy,posture,valid_fsm_event
+from robot_policy import ReceiverPolicy,posture,valid_fsm_event,battery_values
 
 
 class PolicyTests(unittest.TestCase):
+    def test_battery_percent_and_unknown(self):
+        self.assertEqual(battery_values(.72,48.,True)['percent'],72.)
+        for percent in (float('nan'),-1.,72.):
+            self.assertIsNone(battery_values(percent,48.,True)['percent'])
+        self.assertIsNone(battery_values(.7,48.,False)['percent'])
     def test_latched_fsm_confirmation(self):
         event=('loco',1000,1.)
         self.assertTrue(valid_fsm_event(event,True,0,2.))

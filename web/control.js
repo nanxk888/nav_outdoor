@@ -22,6 +22,14 @@ field('robotPose').onclick=async()=>{
 };
 window.updateControl=s=>{
  field('controlState').textContent=s?JSON.stringify(s,null,2):'网关断开，实际机器人状态未知';
+ const batteryAge=s?.battery_receive_age_sec;
+ field('robotBattery').textContent=['battery1','battery2'].map((name,i)=>{
+  const b=s?.batteries?.[name];
+  if(!s)return `电池${i+1}：连接中断`;
+  if(!b)return `电池${i+1}：未收到`;
+  const stale=b.stale||batteryAge==null||batteryAge>90||(b.age_sec||0)+batteryAge>90||(b.source_age_sec!=null&&b.source_age_sec+(b.age_sec||0)+batteryAge>90);
+  return `电池${i+1}：${b.percent==null?'电量未知':b.percent+'%'}${b.voltage==null?'':' / '+b.voltage+'V'}${stale?'（过期）':''}`;
+ }).join(' · ')+'（每60秒获取）';
  const robot=s?.robot,fsm=robot?.fsm||'未知';
  const valid=!!s&&s.robot_receive_age_sec<.3&&robot?.fsm_valid===true;
  field('robotFsm').textContent=`机器人FSM：${fsm}（${valid?'状态校验有效':'未验证/已过期，请勿视作当前状态'}）`;

@@ -168,6 +168,10 @@ FSM每次事件变化有0.3秒历史整理窗口；Python在不超过0.5秒、�
 
 ## 本地回归（不控制硬件）
 
+### 电池只读遥测
+
+Python接收器订阅 `/$ROBOT_NS/system_status_broadcaster/battery1` 和 `battery2`（sensor_msgs/BatteryState），本机持续缓存最新值。Orin首次连接及每60秒发送一次签名battery查询，接收器只在此查询时回传电池数据，不发送运动指令，不要求loco或SDK授权。网页“参数与状态→机器人电量”显示两块电池百分比及电压；百分比按标准0..1转换，不猜测厂家0..100扩展，未知/NaN/越界保留未知。源消息或回传超过90秒标记过期，连接中断明确标注。需控制配置建立UDP链路；默认未加载控制配置时暂没有独立电池连接。D1消息发布频率和厂家percentage字段仍需只读现场验收，不根据电压推算电量。
+
 ```bash
 python3 scripts/test_robot_wire.py
 python3 scripts/test_robot_policy.py

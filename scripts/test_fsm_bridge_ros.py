@@ -15,6 +15,7 @@ from std_msgs.msg import String
 from controller_manager_msgs.srv import ListControllers
 from controller_manager_msgs.msg import ControllerState
 from std_srvs.srv import Trigger
+from sensor_msgs.msg import BatteryState
 from robot_wire import encode,decode
 
 
@@ -45,6 +46,7 @@ def main():
             response.controller=[ControllerState(name=k,state=v) for k,v in states.items()];return response
         service=manager.create_service(ListControllers,'/fixture/controller_manager/list_controllers',listing)
         observer=node('fsm_test_observer')
+        battery_pub=observer.create_publisher(BatteryState,'/fixture/system_status_broadcaster/battery1',10)
         def receive(msg):latest.clear();latest.update(json.loads(msg.data))
         subscription=observer.create_subscription(String,'/nxk_receiver/fsm_status',receive,10)
         # Publish history before the bridge is launched. Inactive history must not win.
@@ -74,10 +76,12 @@ def main():
                 '--port',str(port),'--key-file',str(keyfile)],env=dict(os.environ,ROBOT_NS='fixture'))
             client=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);client.settimeout(.03)
             def receiver_ready():
-                client.sendto(encode(dict(protocol=2,kind='hello',time=time.time(),seq=1),key),('127.0.0.1',port))
+                battery=BatteryState();battery.present=True;battery.percentage=.72;battery.voltage=48.
+                battery.header.stamp=observer.get_clock().now().to_msg();battery_pub.publish(battery)
+                client.sendto(encode(dict(protocol=2,kind='battery',time=time.time(),seq=1),key),('127.0.0.1',port))
                 try:state=decode(client.recvfrom(4096)[0],key)
                 except socket.timeout:return False
-                return state.get('fsm_valid') is True and state.get('biped') is True and state.get('fsm')=='loco' and state.get('authorized') is False and state.get('sdk_enabled') is False
+                return state.get('fsm_valid') is True and state.get('biped') is True and state.get('fsm')=='loco' and state.get('authorized') is False and state.get('sdk_enabled') is False and state.get('batteries',{}).get('battery1',{}).get('percent')==72.
             try:wait(receiver_ready,'real Humble Python receiver single-argument callback and services')
             finally:
                 client.close();receiver.send_signal(signal.SIGINT)
