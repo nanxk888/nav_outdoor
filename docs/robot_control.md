@@ -6,7 +6,9 @@
 
 ### FSM事件接口适配
 
-接收端还需厂家环境提供 `controller_manager_msgs`。现场确认FSM是保留历史的事件话题，不是周期心跳。接收器以可靠、TRANSIENT_LOCAL订阅，按DDS发布者GID区分历史，仅选择本命名空间的唯一d1h_rl_controller发布者。每0.5秒查询控制器管理器：d1h和teleop必须active、d1必须inactive；查询超过1.5秒未更新即不在线。仅在这些条件下采用稳定缓存，绝不根据缓存年龄判断控制器在线。
+接收端还需厂家环境提供 `controller_manager_msgs`。Humble的Python回调不提供发布者GID，因此使用本机C++包 `d1h_robot_bridge` 的只读 `fsm_filter` 节点。该节点以可靠、TRANSIENT_LOCAL订阅，按DDS发布者GID区分历史，仅选择本命名空间的唯一d1h_rl_controller发布者。每0.5秒查询控制器管理器：d1h和teleop必须active、d1必须inactive；查询超过1.5秒未更新即检查无效。仅在这些条件下采用稳定缓存，绝不根据缓存年龄判断控制器在线。它不证明底层实时控制循环或电机健康，硬件安全仍需独立验收。
+
+过滤器只发布 `/nxk_receiver/fsm_status`，没有运动命令发布者。Python使用单参数回调，要求过滤器发布者唯一且状态更新时间小于0.3秒；过滤器缺失、重复、断开时拒绝授权并停止已有会话。
 
 每次真正发布模式命令会清空旧FSM，要求后续样本的DDS源时间戳晚于命令时间；2秒未确认则撤销会话，期间不允许非零速度。状态字段fsm_valid表示状态通过上述校验；兼容旧发送端的fsm_fresh字段表示状态检查有效（等待反馈时FSM为空），不代表收到周期心跳。fsm_event_age_sec单独报告事件接收年龄。源时间戳缺失、发布者不唯一或控制器状态不符均拒绝，不自动切换控制器。此实现仍待D1只读和动作分项验收。
 
@@ -26,16 +28,34 @@ git pull --ff-only
 mkdir -p /root/.config/nxk
 umask 077
 # 仅第一次生成；已有配对密钥不要覆盖。
-test -f /root/.config/nxk/udp.key || openssl rand -hex 32 -out /root/.config/nxk/udp.key
-ssh robot@192.168.19.90 'mkdir -p /home/robot/nxk_receiver'
+test -f /root/.config/nxk/udp.key || openssl rand -hex -out /root/.config/nxk/udp.key 32
+ssh robot@192.168.19.90 'mkdir -p /home/robot/nxk_receiver/bridge_ws/src'
 scp scripts/robot_udp_receiver.py scripts/robot_wire.py scripts/robot_policy.py robot@192.168.19.90:/home/robot/nxk_receiver/
+scp -r src/d1h_robot_bridge robot@192.168.19.90:/home/robot/nxk_receiver/bridge_ws/src/
 scp /root/.config/nxk/udp.key robot@192.168.19.90:/home/robot/nxk_receiver/udp.key
 ssh robot@192.168.19.90 'chmod 700 /home/robot/nxk_receiver; chmod 600 /home/robot/nxk_receiver/udp.key'
 ```
 
 密钥不提交 Git、不贴到日志。协议校验两端主机时间，偏差必须远小于250ms；先配置并验证局域网 chrony/NTP，再启动 LIO。不要在运行中的 LIO 上跳变系统时间。UDP 仅限可信有线网络，并限制来源IP/端口；HMAC 不提供加密。
 
-## 2. D1 先启动只读接收器
+## 2. D1 编译并启动只读FSM过滤器
+
+只在D1本机编译此小包，不编译Orin的LIO，也不升级厂家ROS。需现有colcon、编译器、ament_cmake、rclcpp、std_msgs、controller_manager_msgs；缺少时报告具体依赖，不要为此直接升级整个机器人系统。
+
+```bash
+source /opt/ros/humble/setup.bash
+source /opt/d1_ros2/setup.bash
+source /opt/d1_ros2/namespace.sh
+export ROS_DOMAIN_ID=42 ROS_LOCALHOST_ONLY=1
+cd /home/robot/nxk_receiver/bridge_ws
+colcon build --packages-select d1h_robot_bridge --executor sequential
+source install/local_setup.bash
+ros2 run d1h_robot_bridge fsm_filter --ros-args -p robot_namespace:="$ROBOT_NS" --log-level error
+```
+
+此终端保持运行，没有持续日志是正常的。它不设置SDK模式，不发布UserCommand。不要把此过滤器加入控制器管理器或替换厂家节点。
+
+## 3. D1 另开终端启动只读接收器
 
 在 **D1 本机终端**加载已验证的厂家环境：
 
@@ -63,7 +83,7 @@ python3 scripts/robot_udp_test.py --key-file /root/.config/nxk/udp.key
 
 应得到签名状态回复，包括 `fsm`、`sdk_enabled`、`biped`、`fsm_fresh`、`interfaces_fresh`。`authorized:false` 此时符合预期。若超时，先查时间偏差、IP、防火墙和接收器错误，不发送动作试探。
 
-## 3. 现场授权与动作分项测试
+## 4. 现场授权与动作分项测试
 
 先停止官方键盘控制、旧接收器等其他指令发布者。按厂家流程由操作员开启 SDK 模式；程序不会代开。确认构型为 biped、FSM反馈持续更新。接收器要求 FSM 新鲜度小于1秒、接口状态小于2秒，不满足会撤销会话。
 
@@ -101,7 +121,7 @@ FSM请求按操作ID只下发一次，持续心跳不会反复触发起立。CLI
 
 **高度默认禁止。** 厂家新版文档说明位置暂不可控，原接收器参数不能证明当前固件支持。只有厂家确认适用于本机、现场单独验收后，才可给接收器增加 `--allow-height`，发送器使用 `--height-m`（0.1–0.3m）。首次高度指令没有实际高度反馈，不能保证从实际高度平滑过渡；本轮不建议启用。状态中的 pose/pose_target 是输出/目标命令，不是机身实测姿态。
 
-## 4. 接入网页（独立显式授权）
+## 5. 接入网页（独立显式授权）
 
 本次修改了统一launch，Orin上先加载原有依赖并重新安装该包（不必重新编译LIO）：
 
@@ -148,6 +168,10 @@ python3 scripts/test_robot_policy.py
 python3 scripts/test_robot_udp_pair.py
 python3 scripts/test_navigation_control.py
 python3 scripts/test_navigation_web.py
+# 编译并source过滤器后，隔离域内运行真实Humble接口集成测试：
+ROS_DOMAIN_ID=94 ROS_LOCALHOST_ONLY=1 python3 scripts/test_fsm_bridge_ros.py
 ```
 
 UDP配对测试仅使用回环地址和模拟FSM，不证明厂家SDK实际接受动作。部署后还须分阶段验证只读、零速度、起落/姿态、断网、接收端崩溃、控制权冲突以及低速导航。
+
+`test_fsm_bridge_ros.py` 在真实Humble中启动已编译C++过滤器和Python接收器，使用模拟控制器/参数服务验证GID过滤、缓存、新事件、冲突和失联。只读Python测试将未使用的厂家UserCommand类型替换为标准消息，以便在没有厂家SDK的电脑上验证订阅和服务接口；不验证厂家消息布局或实际动作。

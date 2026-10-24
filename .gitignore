@@ -47,6 +47,7 @@ log/
 !/scripts/robot_udp_test.py
 !/scripts/test_robot_policy.py
 !/scripts/test_robot_udp_pair.py
+!/scripts/test_fsm_bridge_ros.py
 !/scripts/robot_udp_receiver.py
 !/scripts/test_robot_wire.py
 !/scripts/test_navigation_control.py
@@ -69,6 +70,7 @@ log/
 !/src/d1h_fast_lio/
 !/src/d1h_global_localization/
 !/src/d1h_nav2/
+!/src/d1h_robot_bridge/
 
 # Never commit caches, runtime data, credentials, or host-specific deployment files.
 **/__pycache__/

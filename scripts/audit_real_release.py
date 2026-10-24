@@ -13,7 +13,7 @@ def git(*args):return subprocess.check_output(['git',*args],cwd=root)
 def main():
     names=git('ls-files','-z').decode().split('\0')[:-1]
     failures=[];total=0
-    packages={'d1h_fast_lio','d1h_global_localization','d1h_nav2'}
+    packages={'d1h_fast_lio','d1h_global_localization','d1h_nav2','d1h_robot_bridge'}
     secret=re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bgh[pousr]_[A-Za-z0-9]{30,}|\bgithub_pat_[A-Za-z0-9_]{30,}|\bAKIA[A-Z0-9]{16}\b')
     for name in names:
         path=Path(name)

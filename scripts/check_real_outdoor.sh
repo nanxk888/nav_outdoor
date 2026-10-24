@@ -8,6 +8,11 @@ export ROS_DOMAIN_ID=94
 python3 scripts/test_robot_wire.py
 python3 scripts/test_robot_policy.py
 python3 scripts/test_robot_udp_pair.py
+if ros2 pkg prefix d1h_robot_bridge >/dev/null 2>&1; then
+  python3 scripts/test_fsm_bridge_ros.py
+else
+  echo 'SKIP: D1 FSM ROS integration test requires compiled d1h_robot_bridge.'
+fi
 python3 scripts/test_navigation_control.py
 python3 scripts/test_navigation_web.py
 if command -v node >/dev/null 2>&1; then

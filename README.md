@@ -18,6 +18,8 @@ GPS＋LIO全局融合、本体外参适配、真实地面处理及安全监督�
 | 网页工作台 | [navigation_web.md](docs/navigation_web.md) | 本地OSM、GPS、LIO相对轨迹、目标及航向预览；浏览器/Orin联调待验收 |
 | 网线控制适配 | [robot_control.md](docs/robot_control.md) | UserCommand起立/loco/落下、静止姿态、配对UDP测试器；默认禁用，未实机控制验收 |
 
+D1本机接收端另有 `src/d1h_robot_bridge` 只读C++ FSM过滤器，用于兼容Humble并区分厂家两个控制器的历史状态；它不自动随Orin工作空间启动，须按控制部署文档单独部署。
+
 ## 仓库范围
 
 - `src/d1h_fast_lio`：独立的 FAST-LIVO2 导航里程计副本；不开相机、不存全局地图，不发布TF。
