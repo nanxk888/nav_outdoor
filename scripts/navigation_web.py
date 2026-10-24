@@ -86,12 +86,18 @@ class Handler(BaseHTTPRequestHandler):
                 if len(token) < 32 or not hmac.compare_digest(self.headers.get('Authorization',''), 'Bearer '+token):
                     self.send_error(403); return
                 kind = self.path.rsplit('/',1)[-1]
-                if kind not in ('start','stop','heartbeat','navigate') or value != {}:
+                if kind not in ('start','stop','heartbeat','navigate','lower','pose'):
                     raise ValueError('invalid control request')
+                if kind=='pose':
+                    from robot_policy import posture
+                    posture(value,allow_height=True)
+                elif kind=='lower':
+                    if value!={'confirm_stationary':True}:raise ValueError('Confirm physical standstill first')
+                elif value!={}:raise ValueError('Unexpected fields')
                 if kind == 'navigate':
                     with lock: target = operator_settings.get('latitude')
                     if not target: raise ValueError('Select target first')
-                else: target = {}
+                else: target = value
                 try: result = control.enqueue(kind, target)
                 except queue.Full: raise ValueError('Control request queue full')
                 body = json.dumps(result).encode()

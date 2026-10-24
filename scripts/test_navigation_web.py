@@ -38,8 +38,9 @@ class WebTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.server.shutdown();cls.server.server_close();cls.thread.join()
 
-    def post(self, path, body, origin=True):
+    def post(self, path, body, origin=True, token=None):
         headers={'Content-Type':'application/json'}
+        if token:headers['Authorization']='Bearer '+token
         if origin:headers['Origin']=self.base
         return urlopen(Request(self.base+path,data=json.dumps(body).encode(),headers=headers),timeout=2)
 
@@ -71,6 +72,20 @@ class WebTests(unittest.TestCase):
     def test_state(self):
         with urlopen(self.base+'/api/state',timeout=2) as r:data=json.load(r)
         self.assertTrue(data['read_only']);self.assertFalse(data['control']['enabled'])
+
+    def test_pose_lower_authenticated_validation(self):
+        token='local-test-token-not-a-secret-123456789'
+        old=self.m.control;received=[]
+        self.m.control=types.SimpleNamespace(enqueue=lambda kind,value:received.append((kind,value)) or {'queued':True})
+        try:
+            with patch.dict('os.environ',{'NXK_WEB_TOKEN':token}):
+                with self.post('/api/control/pose',{'pitch_rad':.1},token=token) as r:self.assertEqual(r.status,202)
+                with self.post('/api/control/lower',{'confirm_stationary':True},token=token) as r:self.assertEqual(r.status,202)
+                for path,body in (('pose',{'roll_rad':.21}),('lower',{})):
+                    with self.assertRaises(HTTPError) as c:self.post('/api/control/'+path,body,token=token)
+                    self.assertEqual(c.exception.code,400)
+            self.assertEqual([k for k,_ in received],['pose','lower'])
+        finally:self.m.control=old
 
 
 if __name__=='__main__':unittest.main()

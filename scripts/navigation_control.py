@@ -12,6 +12,7 @@ from std_msgs.msg import String
 from nav2_msgs.action import NavigateToPose
 from rclpy.action import ActionClient
 from robot_wire import encode, decode, velocity
+from robot_policy import posture
 
 
 class Control:
@@ -24,14 +25,13 @@ class Control:
         self.safety = {}; self.safety_time = 0.; self.seq = 0
         self.goal_handle = None; self.pending = False; self.generation = 0
         self.config = None; self.sock = None
+        self.pose = None
         filename = os.environ.get('NXK_CONTROL_CONFIG')
         if not filename: return
         self.config = json.loads(Path(filename).read_text())
         c = self.config
         if c.get('hardware_authorized') is not True or c.get('interfaces_verified') is not True:
             self.reason = 'Hardware/SDK interfaces not authorized'; return
-        if not c.get('stand_ready_states') or not c.get('survey_confirmed'):
-            raise ValueError('Reviewed standing feedback states and surveyed datum required')
         self.key = Path(c['key_file']).read_bytes().strip()
         if len(self.key) < 32: raise ValueError('Shared key too short')
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -85,16 +85,23 @@ class Control:
             self.send('stop')
         self.transition('STOPPED', reason)
 
-    def send(self, kind, mode='', v=0., w=0.):
+    def send(self, kind, mode='', v=0., w=0., pose=None, confirm_stationary=False):
         self.seq += 1
-        self.sock.sendto(encode({'kind': kind, 'time': time.time(), 'seq': self.seq,
+        data={'protocol':2,'kind': kind, 'time': time.time(), 'seq': self.seq,
             'session': self.session, 'nonce': self.nonce, 'operation': self.operation,
-            'mode': mode, 'v': v, 'w': w}, self.key), self.target)
+            'mode': mode, 'v': v, 'w': w,'confirm_stationary':confirm_stationary}
+        if pose is not None:data['pose']=pose
+        self.sock.sendto(encode(data, self.key), self.target)
 
     def start_goal(self, value):
         if self.phase != 'READY' or not self.safe() or not self.nav.server_is_ready():
             raise ValueError('Need loco READY, fresh fused safety status and Nav2 server')
         c = self.config; lat, lon = value['latitude'], value['longitude']
+        if not c.get('survey_confirmed'):raise ValueError('Surveyed map datum required for navigation')
+        robot_pose=self.robot.get('pose',{})
+        pending_pose=getattr(self,'pose',None) or {}
+        if any(abs(p.get(k,0))>1e-5 for p in (robot_pose,pending_pose,self.robot.get('pose_target',{})) for k in ('roll_rad','pitch_rad')):
+            raise ValueError('Return posture to neutral before navigation')
         lat0 = math.radians(c['datum_latitude_deg'])
         goal = NavigateToPose.Goal(); goal.pose.header.frame_id = 'map'
         goal.pose.header.stamp = self.node.get_clock().now().to_msg()
@@ -133,10 +140,12 @@ class Control:
                 if addr != self.target: continue
                 try:
                     r = decode(packet, self.key)
-                    if r['kind'] != 'status': continue
+                    if r['kind'] != 'status' or r.get('protocol')!=2: continue
                     # Only accept replies to packets sent recently, not old statuses.
                     if type(r.get('reply_to')) is not int or not 0 <= self.seq-r['reply_to'] <= 12: continue
                     self.robot = r; self.robot_time = now; self.nonce = r['nonce']
+                    if r.get('command_accepted') is False and self.phase not in ('IDLE','STOPPED','DISABLED'):
+                        self.stop('Receiver rejected command: '+r.get('rejection',''))
                 except (ValueError, KeyError, TypeError): continue
             for _ in range(4):
                 try: kind, value = self.requests.get_nowait()
@@ -146,12 +155,24 @@ class Control:
                     elif kind == 'stop': self.stop('Operator stop')
                     elif kind == 'start':
                         if self.phase not in ('IDLE','STOPPED'): raise ValueError('Already active')
-                        if now-self.robot_time>.3 or not self.robot.get('authorized') or not self.robot.get('fsm_fresh'):
+                        if now-self.robot_time>.3 or not all(self.robot.get(k) for k in ('authorized','fsm_fresh','sdk_enabled','biped','interfaces_fresh')):
                             raise ValueError('Robot receiver/FSM not ready')
+                        if self.robot.get('fsm')!='loco' and not self.config.get('stand_ready_states'):
+                            raise ValueError('Confirm standing-complete FSM states first, or use manual commissioning sender')
                         self.browser = now; self.cmd_time = 0.
+                        self.pose = None
                         self.session = secrets.token_hex(16)
                         self.transition('ARMING','Request receiver session')
                     elif kind == 'navigate': self.start_goal(value)
+                    elif kind == 'lower':
+                        if self.phase!='READY' or value.get('confirm_stationary') is not True:
+                            raise ValueError('Stop navigation, reattach loco standby and confirm actual standstill before lowering')
+                        self.pose=None;self.cmd=(0.,0.);self.transition('LOWER_BRAKING','Holding zero before lowering')
+                    elif kind == 'pose':
+                        if self.phase!='READY' or now-self.state_since<.7 or not self.robot.get('pose_enabled'):
+                            raise ValueError('Pose requires stationary loco READY and receiver pose permission')
+                        posture(value,self.robot.get('height_enabled',False));self.pose=dict(value)
+                        self.reason='Posture request pending receiver confirmation'
                 except (ValueError, KeyError) as exc: self.reason = str(exc)
             active = self.phase not in ('IDLE','STOPPED','DISABLED')
             if active and (now-self.browser>2. or now-self.robot_time>.3):
@@ -161,7 +182,8 @@ class Control:
             if self.phase == 'ARMING':
                 self.send('arm')
                 if self.robot.get('active') and not self.robot.get('fault') and self.robot.get('session') == self.session:
-                    self.transition('STANDING','Request transform_up')
+                    if self.robot.get('fsm')=='loco':self.transition('READY','Attached to existing loco at zero speed')
+                    else:self.transition('STANDING','Request transform_up')
             elif self.phase == 'STANDING':
                 self.send('drive','transform_up')
                 if now-self.state_since>.2 and self.robot.get('fsm') in self.config['stand_ready_states']:
@@ -169,6 +191,12 @@ class Control:
             elif self.phase == 'ENTERING_LOCO':
                 self.send('drive','loco')
                 if self.robot.get('fsm') == 'loco': self.transition('READY','loco, holding zero velocity')
+            elif self.phase=='LOWER_BRAKING':
+                self.send('drive')
+                if now-self.state_since>.7:self.transition('LOWERING','Request transform_down')
+            elif self.phase=='LOWERING':
+                self.send('drive','transform_down',confirm_stationary=True)
+                if self.robot.get('fsm')=='idle':self.stop('Lowering finished: idle feedback')
             elif self.phase in ('READY','GOAL_PENDING','NAVIGATING'):
                 if self.robot.get('fsm') != 'loco': self.stop('Unexpected FSM'); return
                 if self.phase in ('GOAL_PENDING','NAVIGATING') and not self.safe():
@@ -178,10 +206,11 @@ class Control:
                         self.stop('Navigation velocity timeout'); return
                     if not self.cmd_time and now-self.state_since>2.:
                         self.stop('No navigation velocity'); return
-                self.send('drive',v=self.cmd[0] if self.phase=='NAVIGATING' else 0.,
-                          w=self.cmd[1] if self.phase=='NAVIGATING' else 0.)
+                fields={'v':self.cmd[0] if self.phase=='NAVIGATING' else 0.,'w':self.cmd[1] if self.phase=='NAVIGATING' else 0.}
+                if self.phase=='READY' and getattr(self,'pose',None) is not None:fields['pose']=self.pose
+                self.send('drive',**fields)
             else: self.send('hello')
-            if self.phase in ('ARMING','STANDING','ENTERING_LOCO') and now-self.state_since>10.:
+            if self.phase in ('ARMING','STANDING','ENTERING_LOCO','LOWERING') and now-self.state_since>10.:
                 self.stop('Robot transition timeout')
             if self.phase == 'GOAL_PENDING' and now-self.state_since>2.:
                 self.stop('Nav2 acknowledgement timeout')

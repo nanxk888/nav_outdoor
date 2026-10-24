@@ -1,15 +1,19 @@
 let heartbeatEnabled=false, pendingHeartbeat=false;
 const field=id=>document.getElementById(id);
-async function command(kind){const token=field('controlToken').value;
- const r=await fetch('/api/control/'+kind,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:'{}',signal:AbortSignal.timeout(1500)});
+async function command(kind,body={}){const token=field('controlToken').value;
+ const r=await fetch('/api/control/'+kind,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(body),signal:AbortSignal.timeout(1500)});
  if(!r.ok)throw Error(await r.text());return r.json();}
 for(const [id,kind] of [['robotStart','start'],['robotNavigate','navigate'],['robotStop','stop']]){
  field(id).onclick=async()=>{if(kind!=='stop'&&!confirm(kind==='start'?'确认现场安全、急停可用、SDK模式和接收端已授权？将使机器人站立。':'确认目标预览并请求真实导航？'))return;
  try{const r=await command(kind);heartbeatEnabled=kind!=='stop';field('controlResult').textContent='请求已排队，不代表执行成功：'+JSON.stringify(r)}catch(e){field('controlResult').textContent='请求失败或结果未知：'+e.message}};
 }
+field('robotLower').onclick=async()=>{if(!confirm('确认实际机器人已停稳、场地安全？将请求落下；导航任务中禁止此操作。'))return;try{await command('lower',{confirm_stationary:true});heartbeatEnabled=true;field('controlResult').textContent='落下请求已排队，等待实际FSM反馈。'}catch(e){field('controlResult').textContent='落下请求失败或结果未知：'+e.message}};
+field('robotPose').onclick=async()=>{const roll=field('rollValue').value,pitch=field('pitchValue').value;const r=Number(roll),p=Number(pitch);if(!roll.trim()||!pitch.trim()||!Number.isFinite(r)||!Number.isFinite(p)||Math.abs(r)>11.4||Math.abs(p)>22.9){field('controlResult').textContent='姿态角为空或越界';return}if(!confirm('确认停稳且loco稳定？将改变机身姿态，必要时使用硬件急停。'))return;try{await command('pose',{roll_rad:r*Math.PI/180,pitch_rad:p*Math.PI/180});field('controlResult').textContent='姿态请求已排队；接收成功不代表机身已达到目标角度。'}catch(e){field('controlResult').textContent='姿态请求失败或结果未知：'+e.message}};
 window.updateControl=s=>{field('controlState').textContent=s?JSON.stringify(s,null,2):'网关断开，机器人停止状态未知，请确认硬件安全';
- const phases={DISABLED:'控制未授权',IDLE:'控制待机',STANDING:'请求站立中',ARMING:'连接接收器',ENTERING_LOCO:'进入loco',READY:'loco零速度待命',GOAL_PENDING:'等待导航确认',NAVIGATING:'导航任务中',STOPPED:'任务已停止'};
+ const phases={DISABLED:'控制未授权',IDLE:'控制待机',STANDING:'请求站立中',ARMING:'连接接收器',ENTERING_LOCO:'进入loco',READY:'loco零速度待命',LOWER_BRAKING:'落下前零速度保持',LOWERING:'请求落下中',GOAL_PENDING:'等待导航确认',NAVIGATING:'导航任务中',STOPPED:'任务已停止'};
  field('controlBrief').textContent=s?(phases[s.phase]||s.phase):'控制状态未知';
+ field('robotLower').disabled=!s?.enabled||s.phase!=='READY';
+ field('robotPose').disabled=!s?.enabled||s.phase!=='READY'||!s.robot?.pose_enabled;
  field('robotStart').disabled=!s?.enabled||!['IDLE','STOPPED'].includes(s.phase);
  field('robotNavigate').disabled=!s?.enabled||s.phase!=='READY'||!s.navigation_safe;
  if(s&&['IDLE','STOPPED','DISABLED'].includes(s.phase))heartbeatEnabled=false;};

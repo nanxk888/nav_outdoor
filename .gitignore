@@ -43,6 +43,10 @@ log/
 !/scripts/test_gnss_driver_guard.py
 !/scripts/navigation_control.py
 !/scripts/robot_wire.py
+!/scripts/robot_policy.py
+!/scripts/robot_udp_test.py
+!/scripts/test_robot_policy.py
+!/scripts/test_robot_udp_pair.py
 !/scripts/robot_udp_receiver.py
 !/scripts/test_robot_wire.py
 !/scripts/test_navigation_control.py

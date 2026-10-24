@@ -58,7 +58,8 @@ def configure(context):
         critical.append(gate)
     if enabled('with_web'):
         web=ExecuteProcess(cmd=[sys.executable,str(root/'scripts/navigation_web.py')],output='screen',
-                           additional_env={'NXK_CONTROL_CONFIG':'','NXK_WEB_TOKEN':'',
+                           additional_env={'NXK_CONTROL_CONFIG':arg('control_config'),
+                                           'NXK_WEB_TOKEN':os.environ.get('NXK_WEB_TOKEN','') if arg('control_config') else '',
                                            'NXK_LOG_LEVEL':arg('log_level')},name='navigation_web')
         critical.append(web)
     # Register before spawning; fail the bringup if any owned top-level process exits.
@@ -74,6 +75,7 @@ def generate_launch_description():
         DeclareLaunchArgument('workspace',description='Absolute source checkout path'),
         DeclareLaunchArgument('domain',default_value='0'),
         DeclareLaunchArgument('log_level',default_value='error'),
+        DeclareLaunchArgument('control_config',default_value='',description='Optional private reviewed control config; empty disables robot control'),
         DeclareLaunchArgument('with_gps_driver',default_value='true'),
         DeclareLaunchArgument('gps_driver_root',default_value='/workspace/d1h-autonomy-final'),
         DeclareLaunchArgument('gps_driver_config',default_value='/workspace/d1h-autonomy-final/.local/robot/perception/gnss.yaml'),

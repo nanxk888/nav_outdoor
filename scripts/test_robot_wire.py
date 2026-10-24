@@ -29,6 +29,10 @@ class WireTests(unittest.TestCase):
     def test_size(self):
         with self.assertRaises(ValueError):decode(b'x'*4097,self.key)
 
+    def test_malformed_envelope(self):
+        for packet in (b'[]',b'null',b'{"body":3,"mac":"x"}',b'{"body":"{}","mac":null}'):
+            with self.assertRaises(ValueError):decode(packet,self.key)
+
     def test_speed(self):
         self.assertEqual(velocity(.2,-.3),(.2,-.3))
         for v,w in [(-.1,0),(.31,0),(0,.51),(math.nan,0),(0,math.inf),(True,0)]:

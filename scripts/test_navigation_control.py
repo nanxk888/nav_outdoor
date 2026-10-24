@@ -72,5 +72,24 @@ class ControlTests(unittest.TestCase):
         c.safety={'navigation_ready':True,'base_link_ready':True,'map_alignment_verified':True,'stamp':99.9}
         c.cmd_time=time.monotonic()-.3;c.tick();self.assertEqual(c.phase,'STOPPED')
 
+    def test_pose_ready_only(self):
+        c=self.instance();c.robot['pose_enabled']=True;c.state_since-=1
+        c.requests.put(('pose',{'pitch_rad':.1}));c.tick()
+        self.assertEqual(c.sent[-1][1]['pose'],{'pitch_rad':.1})
+
+    def test_lower_navigation_rejected(self):
+        c=self.instance('NAVIGATING');c.safety_time=time.monotonic()
+        c.safety={'navigation_ready':True,'base_link_ready':True,'map_alignment_verified':True,'stamp':99.9}
+        c.requests.put(('lower',{'confirm_stationary':True}));c.tick()
+        self.assertEqual(c.phase,'NAVIGATING')
+        self.assertIn('Stop navigation',c.reason)
+
+    def test_lower_zero_braking(self):
+        c=self.instance();c.requests.put(('lower',{'confirm_stationary':True}));c.tick()
+        self.assertEqual(c.phase,'LOWER_BRAKING');self.assertEqual(c.sent[-1][0],('drive',))
+        c.state_since-=1;c.tick();self.assertEqual(c.phase,'LOWERING')
+        c.tick();self.assertEqual(c.sent[-1][0],('drive','transform_down'))
+        self.assertTrue(c.sent[-1][1]['confirm_stationary'])
+
 
 if __name__=='__main__':unittest.main()

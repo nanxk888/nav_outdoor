@@ -74,6 +74,8 @@ ssh -N -L 8765:127.0.0.1:8765 用户名@Orin地址
 
 ## Orin增量部署（默认只读）
 
+网线接收/发送端现支持统一 UserCommand 的起立、loco、落下及静止姿态设置，部署与现场逐项测试见 [robot_control.md](robot_control.md)。默认仍只读；需显式传入 `control_config:=/私有路径/control.json` 并设置独立网页令牌才开放控制。启动统一工作空间不会自动授权运动。地图目标和初始方向预览不能替代定位融合与安全监督。
+
 先 `git status --short`，有本地修改时保留并人工处理，禁止reset覆盖。工作树干净时：
 
 ```bash

@@ -16,7 +16,7 @@ GPS＋LIO全局融合、本体外参适配、真实地面处理及安全监督�
 | LC29H GPS接入 | [real_gnss.md](docs/real_gnss.md) | 质量门控已实现；非GPS＋LIO融合器 |
 | OSM道路规划 | [real_osm_navigation.md](docs/real_osm_navigation.md) | 道路图A*＋五米局部Smac规划＋RPP，尚未真机闭环验收 |
 | 网页工作台 | [navigation_web.md](docs/navigation_web.md) | 本地OSM、GPS、LIO相对轨迹、目标及航向预览；浏览器/Orin联调待验收 |
-| 网线控制适配 | [robot_control.md](docs/robot_control.md) | 配对UDP收发、FSM及Nav2接口；默认禁用，未实机控制验收 |
+| 网线控制适配 | [robot_control.md](docs/robot_control.md) | UserCommand起立/loco/落下、静止姿态、配对UDP测试器；默认禁用，未实机控制验收 |
 
 ## 仓库范围
 

@@ -6,6 +6,8 @@ source install/local_setup.bash
 # All ROS fixtures are isolated from the live sensor / control domains.
 export ROS_DOMAIN_ID=94
 python3 scripts/test_robot_wire.py
+python3 scripts/test_robot_policy.py
+python3 scripts/test_robot_udp_pair.py
 python3 scripts/test_navigation_control.py
 python3 scripts/test_navigation_web.py
 if command -v node >/dev/null 2>&1; then
