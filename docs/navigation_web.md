@@ -2,7 +2,11 @@
 
 ## 统一启动（推荐）
 
-新增 `d1h_nav2/launch/real_workspace.launch.py`，默认一次启动我们的LIO、96→0 GPS桥接、GPS门控和网页，均无自动运动授权。不会启动原项目硬件驱动，不启动未验收导航、融合或D1接收器。
+新增 `d1h_nav2/launch/real_workspace.launch.py`，默认一次启动GPS驱动检查器、LIO、96→0 GPS桥接、GPS门控和网页，均无自动运动授权。不启动未验收导航、融合或D1接收器；Livox硬件驱动仍由外部启动。
+
+GPS检查器在当前Linux进程可见范围内查找精确脚本名gnss_receiver.py，不会把real_gnss_gate误判为驱动。已有驱动就复用、不终止；没有时读取原项目gnss.yaml的port，USB路径可见后通过原system_exec.sh在Domain96启动原驱动。USB未插好时只报一次缺失并等待，不阻止LIO/网页。自行启动的驱动异常退出不循环重启，而是报告错误并关闭整组。Ctrl+C只清理本检查器拥有的子进程组；旧驱动不受影响。旧驱动退出时会再次检查并尝试接管；不要与其他自动管理器竞争，也不要跨容器同时打开同一串口（PID命名空间可能互不可见）。
+
+参数：with_gps_driver默认true，可设false关闭。gps_driver_root默认/workspace/d1h-autonomy-final，gps_driver_config默认该项目.local/robot/perception/gnss.yaml，可按现场路径覆盖。驱动和私有配置不复制进仓库。修正DDS环境变量为真正unset，避免空路径XMLPARSER错误。
 
 默认 `log_level:=error`：运行中仅输出ROS错误，逐帧点数/残差/滑窗信息为DEBUG，不刷屏。launch本身仍可能打印少量进程启动/退出信息；异常退出的stderr与安全保护错误保留。排障可临时使用 `log_level:=debug`。修改C++日志后需要重新构建d1h_fast_lio，不能只拉取源码重启。
 
@@ -18,7 +22,7 @@ source install/setup.bash
 bash scripts/launch_real_workspace.sh
 ```
 
-前置：Livox驱动已在Domain0发布雷达与IMU，GPS驱动已在96运行；domain_bridge、rmw_cyclonedds_cpp已安装。GPS专用XML默认使用现场原项目路径，可用 `gps_cyclonedds_xml:=/absolute/file.xml` 覆盖。Ctrl+C会停止本入口拥有的模块，不杀其他终端或原项目进程。任一直接子进程退出会关闭整组，不自动重启；LIO启动后缺传感器会保护退出。不要同时运行旧的同名模块或第二个网页（8765端口）；先在对应旧终端Ctrl+C。没有sudo、pkill、网卡修改或串口操作。
+前置：Livox驱动已在Domain0发布雷达与IMU；domain_bridge、rmw_cyclonedds_cpp及原GPS驱动依赖已安装。GPS专用XML默认使用现场原项目路径，可用 `gps_cyclonedds_xml:=/absolute/file.xml` 覆盖。Ctrl+C停止本入口拥有的模块，不杀外部进程。任一直接子进程退出会关闭整组，不自动重启；LIO缺传感器会保护退出。不要同时运行旧同名模块或第二个网页（8765端口）。不执行sudo、pkill或网卡修改；仅缺少GPS驱动且设备可见时打开配置中的串口。
 
 已有部分模块在其他终端运行时，可明确关闭本入口相应模块，例如 `bash scripts/launch_real_workspace.sh with_lio:=false`。支持 with_gps_bridge、with_gnss_gate、with_web。同组统一Domain0/FastDDS，桥接进程独立使用CycloneDDS源配置。默认不读取NXK控制环境配置，防止新开终端继承运动授权。
 
@@ -65,6 +69,6 @@ unset NXK_WEB_TOKEN
 ROS_DOMAIN_ID=0 python3 scripts/navigation_web.py
 ```
 
-本次增加的是脚本和静态页面，原三包已构建时无需为网页重新colcon编译。需确保GPS桥接和LIO在域0；当前终端若继承了Domain96专用DDS配置，应先与正常LIO终端环境匹配。接口缺失会显示无数据，不自动启动GPS驱动或导航。启动依赖 nav2_msgs，可通过 `ros2 interface show nav2_msgs/action/NavigateToPose` 检查；此处导入接口不等于开启运动。
+仅网页静态文件更新时无需重新编译；新增或修改统一launch时需重新构建d1h_nav2。需确保GPS桥接和LIO在域0；单独启动网页不会自动拉起GPS驱动，统一入口会检查并按需启动。启动依赖nav2_msgs，导入接口不等于开启运动。
 
 电脑通过上述SSH隧道访问。终端保持运行，Ctrl+C退出。该增量不会更改网卡、GPS驱动、DDS域或厂家SDK。

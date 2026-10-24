@@ -8,6 +8,7 @@ export ROS_DOMAIN_ID=94
 python3 scripts/test_robot_wire.py
 python3 scripts/test_navigation_control.py
 python3 scripts/test_navigation_web.py
+python3 scripts/test_gnss_driver_guard.py
 python3 scripts/test_gnss_quality.py
 python3 scripts/test_osm_roads.py
 python3 scripts/test_obstacle_memory.py

@@ -39,6 +39,8 @@ log/
 !/scripts/test_stable_planner.py
 !/scripts/navigation_web.py
 !/scripts/launch_real_workspace.sh
+!/scripts/ensure_real_gnss_driver.py
+!/scripts/test_gnss_driver_guard.py
 !/scripts/navigation_control.py
 !/scripts/robot_wire.py
 !/scripts/robot_udp_receiver.py

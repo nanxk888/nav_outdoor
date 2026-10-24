@@ -1,11 +1,12 @@
-"""One-command workspace bringup. Existing hardware drivers remain external."""
+"""Workspace bringup with optional guarded GPS driver; Livox driver is external."""
 import os
 import sys
 from pathlib import Path
 from ament_index_python.packages import get_package_share_directory, get_package_prefix
 from launch import LaunchDescription
 from launch.actions import (DeclareLaunchArgument, ExecuteProcess,
-                            OpaqueFunction, RegisterEventHandler, EmitEvent, LogInfo, SetEnvironmentVariable)
+                            OpaqueFunction, RegisterEventHandler, EmitEvent, SetEnvironmentVariable,
+                            UnsetEnvironmentVariable)
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch.substitutions import LaunchConfiguration
@@ -25,11 +26,16 @@ def configure(context):
     actions=[SetEnvironmentVariable('ROS_DOMAIN_ID','0'),
              SetEnvironmentVariable('ROS_LOCALHOST_ONLY','0'),
              SetEnvironmentVariable('RMW_IMPLEMENTATION','rmw_fastrtps_cpp'),
-             SetEnvironmentVariable('CYCLONEDDS_URI',''),
-             SetEnvironmentVariable('FASTRTPS_DEFAULT_PROFILES_FILE',''),
-             SetEnvironmentVariable('FASTDDS_DEFAULT_PROFILES_FILE',''),
-             SetEnvironmentVariable('ROS_DISCOVERY_SERVER','')]
+             UnsetEnvironmentVariable('CYCLONEDDS_URI'),
+             UnsetEnvironmentVariable('FASTRTPS_DEFAULT_PROFILES_FILE'),
+             UnsetEnvironmentVariable('FASTDDS_DEFAULT_PROFILES_FILE'),
+             UnsetEnvironmentVariable('ROS_DISCOVERY_SERVER')]
     critical=[]
+    if enabled('with_gps_driver'):
+        guard=ExecuteProcess(cmd=[sys.executable,str(root/'scripts/ensure_real_gnss_driver.py'),
+            '--root',arg('gps_driver_root'),'--config',arg('gps_driver_config'),
+            '--cyclonedds',arg('gps_cyclonedds_xml')],output='screen',name='gps_driver_guard')
+        critical.append(guard)
     if enabled('with_gps_bridge'):
         xml=Path(arg('gps_cyclonedds_xml'))
         if not xml.is_file(): raise RuntimeError('GPS CycloneDDS configuration not found: '+str(xml))
@@ -68,6 +74,9 @@ def generate_launch_description():
         DeclareLaunchArgument('workspace',description='Absolute source checkout path'),
         DeclareLaunchArgument('domain',default_value='0'),
         DeclareLaunchArgument('log_level',default_value='error'),
+        DeclareLaunchArgument('with_gps_driver',default_value='true'),
+        DeclareLaunchArgument('gps_driver_root',default_value='/workspace/d1h-autonomy-final'),
+        DeclareLaunchArgument('gps_driver_config',default_value='/workspace/d1h-autonomy-final/.local/robot/perception/gnss.yaml'),
         DeclareLaunchArgument('with_gps_bridge',default_value='true'),
         DeclareLaunchArgument('with_lio',default_value='true'),
         DeclareLaunchArgument('with_gnss_gate',default_value='true'),
