@@ -1,9 +1,16 @@
 """No ROS/hardware: receive-side motion state regression."""
 import unittest
-from robot_policy import ReceiverPolicy,posture
+from robot_policy import ReceiverPolicy,posture,valid_fsm_event
 
 
 class PolicyTests(unittest.TestCase):
+    def test_latched_fsm_confirmation(self):
+        event=('loco',1000,1.)
+        self.assertTrue(valid_fsm_event(event,True,0,2.))
+        self.assertFalse(valid_fsm_event(event,False,0,2.))
+        self.assertFalse(valid_fsm_event(event,True,1001,2.))
+        self.assertFalse(valid_fsm_event(event,True,0,1.1))
+        self.assertFalse(valid_fsm_event(None,True,0,2.))
     def setup_policy(self):
         p=ReceiverPolicy(True,True);p.feedback('idle',0);p.interfaces(True,True,0)
         packet=dict(protocol=2,kind='arm',nonce=p.nonce,seq=1,session='test',operation='a')

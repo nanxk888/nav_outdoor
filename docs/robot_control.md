@@ -4,6 +4,12 @@
 
 兼容ROS 2 Humble：通过标准 `rcl_interfaces/srv/GetParameters` 服务读取 SDK 开关，不依赖厂家环境可能未提供的 `rclpy.parameter_client` 模块。不需要为接收器升级机器人ROS安装。
 
+### FSM事件接口适配
+
+接收端还需厂家环境提供 `controller_manager_msgs`。现场确认FSM是保留历史的事件话题，不是周期心跳。接收器以可靠、TRANSIENT_LOCAL订阅，按DDS发布者GID区分历史，仅选择本命名空间的唯一d1h_rl_controller发布者。每0.5秒查询控制器管理器：d1h和teleop必须active、d1必须inactive；查询超过1.5秒未更新即不在线。仅在这些条件下采用稳定缓存，绝不根据缓存年龄判断控制器在线。
+
+每次真正发布模式命令会清空旧FSM，要求后续样本的DDS源时间戳晚于命令时间；2秒未确认则撤销会话，期间不允许非零速度。状态字段fsm_valid表示状态通过上述校验；兼容旧发送端的fsm_fresh字段表示状态检查有效（等待反馈时FSM为空），不代表收到周期心跳。fsm_event_age_sec单独报告事件接收年龄。源时间戳缺失、发布者不唯一或控制器状态不符均拒绝，不自动切换控制器。此实现仍待D1只读和动作分项验收。
+
 ## 接口与数据链路
 
 Orin（192.168.19.91）产生指令 → UDP 10099 → D1（192.168.19.90）接收器 → 本机 `/d13007925/command/user_command`，类型 `ddt_msgs/msg/UserCommand`。接收器读取实际 FSM、SDK 开关和双轮足构型。SSH 只用于部署文件，不承担运行时运动指令传输。

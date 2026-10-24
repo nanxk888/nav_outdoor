@@ -4,6 +4,11 @@ import secrets
 from robot_wire import velocity
 
 
+def valid_fsm_event(event, online, required_source_ns, now):
+    """Require a settled writer history and a post-command DDS source timestamp."""
+    return bool(online and event is not None and now-event[2]>.3 and event[1]>required_source_ns)
+
+
 def posture(value, allow_height=False):
     if not isinstance(value, dict) or set(value)-{'roll_rad','pitch_rad','height_m'}:
         raise ValueError('invalid posture fields')
