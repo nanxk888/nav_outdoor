@@ -24,7 +24,18 @@ bash scripts/launch_real_workspace.sh
 
 前置：Livox驱动已在Domain0发布雷达与IMU；domain_bridge、rmw_cyclonedds_cpp及原GPS驱动依赖已安装。GPS专用XML默认使用现场原项目路径，可用 `gps_cyclonedds_xml:=/absolute/file.xml` 覆盖。Ctrl+C停止本入口拥有的模块，不杀外部进程。任一直接子进程退出会关闭整组，不自动重启；LIO缺传感器会保护退出。不要同时运行旧同名模块或第二个网页（8765端口）。不执行sudo、pkill或网卡修改；仅缺少GPS驱动且设备可见时打开配置中的串口。
 
-已有部分模块在其他终端运行时，可明确关闭本入口相应模块，例如 `bash scripts/launch_real_workspace.sh with_lio:=false`。支持 with_gps_bridge、with_gnss_gate、with_web。同组统一Domain0/FastDDS，桥接进程独立使用CycloneDDS源配置。默认不读取NXK控制环境配置，防止新开终端继承运动授权。
+已有部分模块在其他终端运行时，可明确关闭本入口相应模块，例如 `bash scripts/launch_real_workspace.sh with_lio:=false`。支持 with_gps_bridge、with_gnss_gate、with_web。整组统一Domain0/CycloneDDS，使用gps_cyclonedds_xml指定的同一发现配置（GPS驱动仍Domain96）。默认不读取NXK控制环境配置，防止新开终端继承运动授权。
+
+现场XML限定127.0.0.1接口、禁组播并设置本机静态peer。桥接与网页/门控使用不同DDS发现配置时，即使同Domain也可能互不可见。2026-10-24已根据现场Domain0/Cyclone能够读取桥接GPS、FastDDS不能读取的证据统一配置。不是说不同DDS实现始终不能互通；这里是发现配置不兼容。原XML不修改，网页仍可通过SSH转发访问。
+
+手动启动网页或CLI诊断时也需要匹配环境：
+
+```bash
+export ROS_DOMAIN_ID=0 ROS_LOCALHOST_ONLY=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file:///workspace/d1h-autonomy-final/.local/robot/perception/cyclonedds.xml
+unset FASTRTPS_DEFAULT_PROFILES_FILE FASTDDS_DEFAULT_PROFILES_FILE ROS_DISCOVERY_SERVER
+```
 
 也可直接使用：`ros2 launch d1h_nav2 real_workspace.launch.py workspace:=/workspace/nxk`。统一入口不等于传感器/融合/导航验收已完成；GPS室内无定位时仍不会绘制位置。
 

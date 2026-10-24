@@ -23,10 +23,12 @@ def configure(context):
     if not (root/'scripts/navigation_web.py').is_file():
         raise RuntimeError('workspace must be the source checkout, e.g. /workspace/nxk')
     if arg('domain') != '0': raise RuntimeError('This bringup is explicitly Domain 0; bridge destination is 0')
+    xml=Path(arg('gps_cyclonedds_xml')).resolve()
+    if not xml.is_file(): raise RuntimeError('Shared CycloneDDS configuration not found: '+str(xml))
     actions=[SetEnvironmentVariable('ROS_DOMAIN_ID','0'),
              SetEnvironmentVariable('ROS_LOCALHOST_ONLY','0'),
-             SetEnvironmentVariable('RMW_IMPLEMENTATION','rmw_fastrtps_cpp'),
-             UnsetEnvironmentVariable('CYCLONEDDS_URI'),
+             SetEnvironmentVariable('RMW_IMPLEMENTATION','rmw_cyclonedds_cpp'),
+             SetEnvironmentVariable('CYCLONEDDS_URI',xml.as_uri()),
              UnsetEnvironmentVariable('FASTRTPS_DEFAULT_PROFILES_FILE'),
              UnsetEnvironmentVariable('FASTDDS_DEFAULT_PROFILES_FILE'),
              UnsetEnvironmentVariable('ROS_DISCOVERY_SERVER')]
@@ -37,8 +39,6 @@ def configure(context):
             '--cyclonedds',arg('gps_cyclonedds_xml')],output='screen',name='gps_driver_guard')
         critical.append(guard)
     if enabled('with_gps_bridge'):
-        xml=Path(arg('gps_cyclonedds_xml'))
-        if not xml.is_file(): raise RuntimeError('GPS CycloneDDS configuration not found: '+str(xml))
         bridge=ExecuteProcess(cmd=[str(Path(get_package_prefix('domain_bridge'))/'lib/domain_bridge/domain_bridge'),
             str(root/'map/gnss_bridge.yaml')],output='screen',
             additional_env={'RMW_IMPLEMENTATION':'rmw_cyclonedds_cpp','CYCLONEDDS_URI':xml.as_uri()},
