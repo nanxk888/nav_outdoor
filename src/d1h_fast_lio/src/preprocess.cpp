@@ -11,6 +11,7 @@ which is included as part of this source code package.
 */
 
 #include "preprocess.h"
+#include <rclcpp/rclcpp.hpp>
 
 #define RETURN0 0x00
 #define RETURN0AND1 0x10
@@ -103,7 +104,7 @@ void Preprocess::avia_handler(const livox_custom_msg::CustomMsg::SharedPtr &msg)
   pl_full.clear();
   double t1 = omp_get_wtime();
   int plsize = msg->point_num;
-  printf("[ Preprocess ] Input point number: %d \n", plsize);
+  RCLCPP_DEBUG(rclcpp::get_logger("navigation_lio"), "Preprocess input points: %d", plsize);
   // printf("point_filter_num: %d\n", point_filter_num);
 
   pl_corn.reserve(plsize);
@@ -163,7 +164,7 @@ void Preprocess::avia_handler(const livox_custom_msg::CustomMsg::SharedPtr &msg)
       // pl_surf += pl;
     }
     time += omp_get_wtime() - t0;
-    printf("Feature extraction time: %lf \n", time / count);
+    RCLCPP_DEBUG(rclcpp::get_logger("navigation_lio"), "Feature extraction time: %lf", time / count);
   }
   else
   {
@@ -201,7 +202,7 @@ void Preprocess::avia_handler(const livox_custom_msg::CustomMsg::SharedPtr &msg)
       }
     }
   }
-  printf("[ Preprocess ] Output point number: %zu \n", pl_surf.points.size());
+  RCLCPP_DEBUG(rclcpp::get_logger("navigation_lio"), "Preprocess output points: %zu", pl_surf.points.size());
 }
 
 void Preprocess::l515_handler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg)
@@ -239,7 +240,7 @@ void Preprocess::l515_handler(const sensor_msgs::msg::PointCloud2::ConstSharedPt
     pl_surf.points.push_back(added_pt);
   }
 
-  cout << "pl size:: " << pl_orig.points.size() << endl;
+  RCLCPP_DEBUG(rclcpp::get_logger("navigation_lio"), "Cloud points: %zu", pl_orig.points.size());
   // pub_func(pl_surf, pub_full, msg->header.stamp);
   // pub_func(pl_surf, pub_corn, msg->header.stamp);
 }

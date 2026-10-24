@@ -4,6 +4,8 @@
 
 新增 `d1h_nav2/launch/real_workspace.launch.py`，默认一次启动我们的LIO、96→0 GPS桥接、GPS门控和网页，均无自动运动授权。不会启动原项目硬件驱动，不启动未验收导航、融合或D1接收器。
 
+默认 `log_level:=error`：运行中仅输出ROS错误，逐帧点数/残差/滑窗信息为DEBUG，不刷屏。launch本身仍可能打印少量进程启动/退出信息；异常退出的stderr与安全保护错误保留。排障可临时使用 `log_level:=debug`。修改C++日志后需要重新构建d1h_fast_lio，不能只拉取源码重启。
+
 更新后需要重建launch所属包一次：
 
 ```bash

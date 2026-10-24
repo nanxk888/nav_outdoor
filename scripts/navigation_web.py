@@ -170,7 +170,8 @@ def main():
     server = ThreadingHTTPServer(('127.0.0.1', 8765), Handler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    print('Read-only dashboard: http://127.0.0.1:8765 (no motion outputs)', flush=True)
+    if os.environ.get('NXK_LOG_LEVEL', 'error').lower() in ('debug','info'):
+        print('Dashboard: http://127.0.0.1:8765 (control disabled by default)', flush=True)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

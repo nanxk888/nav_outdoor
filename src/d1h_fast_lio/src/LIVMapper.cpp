@@ -352,7 +352,7 @@ void LIVMapper::handleFirstFrame()
     _first_lidar_time = LidarMeasures.last_lio_update_time;
     p_imu->first_lidar_time = _first_lidar_time; // Only for IMU data log
     is_first_frame = true;
-    cout << "FIRST LIDAR FRAME!" << endl;
+    RCLCPP_DEBUG(node->get_logger(), "First LiDAR frame");
   }
 }
 
@@ -360,7 +360,7 @@ void LIVMapper::gravityAlignment()
 {
   if (!p_imu->imu_need_init && !gravity_align_finished) 
   {
-    std::cout << "Gravity Alignment Starts" << std::endl;
+    RCLCPP_DEBUG(node->get_logger(), "Gravity alignment starts");
     V3D ez(0, 0, -1), gz(_state.gravity);
     Eigen::Quaterniond G_q_I0 = Eigen::Quaterniond::FromTwoVectors(gz, ez);
     M3D G_R_I0 = G_q_I0.toRotationMatrix();
@@ -375,7 +375,7 @@ void LIVMapper::gravityAlignment()
     _state.vel_end = G_R_I0 * _state.vel_end;
     _state.gravity = G_R_I0 * _state.gravity;
     gravity_align_finished = true;
-    std::cout << "Gravity Alignment Finished" << std::endl;
+    RCLCPP_DEBUG(node->get_logger(), "Gravity alignment finished");
   }
 }
 
@@ -544,7 +544,7 @@ void LIVMapper::handleLIO()
            
   if (feats_undistort->empty() || (feats_undistort == nullptr)) 
   {
-    std::cout << "[ LIO ]: No point!!!" << std::endl;
+    RCLCPP_DEBUG(node->get_logger(), "LIO has no initialized points yet");
     return;
   }
 

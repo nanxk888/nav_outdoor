@@ -11,6 +11,8 @@ def generate_launch_description():
     share=get_package_share_directory('d1h_fast_lio')
     return LaunchDescription([
         DeclareLaunchArgument('params_file',default_value=os.path.join(share,'config','navigation_lio.yaml')),
+        DeclareLaunchArgument('log_level', default_value='error'),
         Node(package='d1h_fast_lio',executable='lio_odometry',name='navigation_lio',output='screen',
-             respawn=False,parameters=[LaunchConfiguration('params_file'),{'use_sim_time':False}]),
+             respawn=False,arguments=['--ros-args','--log-level',LaunchConfiguration('log_level')],
+             parameters=[LaunchConfiguration('params_file'),{'use_sim_time':False}]),
     ])

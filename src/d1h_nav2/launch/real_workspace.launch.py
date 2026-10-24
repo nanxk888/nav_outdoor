@@ -40,19 +40,21 @@ def configure(context):
         critical.append(bridge)
     if enabled('with_lio'):
         lio=Node(package='d1h_fast_lio',executable='lio_odometry',name='navigation_lio',
+                 arguments=['--ros-args','--log-level',arg('log_level')],
                  parameters=[os.path.join(get_package_share_directory('d1h_fast_lio'),'config','navigation_lio.yaml'),
                              {'use_sim_time':False}],output='screen',respawn=False)
         critical.append(lio)
     if enabled('with_gnss_gate'):
         gate=Node(package='d1h_global_localization',executable='real_gnss',name='real_gnss_gate',
+                  arguments=['--ros-args','--log-level',arg('log_level')],
                   parameters=[os.path.join(get_package_share_directory('d1h_global_localization'),'config','real_lc29h_gnss.yaml'),
                               {'use_sim_time':False}],output='screen',respawn=False)
         critical.append(gate)
     if enabled('with_web'):
         web=ExecuteProcess(cmd=[sys.executable,str(root/'scripts/navigation_web.py')],output='screen',
-                           additional_env={'NXK_CONTROL_CONFIG':'','NXK_WEB_TOKEN':''},name='navigation_web')
+                           additional_env={'NXK_CONTROL_CONFIG':'','NXK_WEB_TOKEN':'',
+                                           'NXK_LOG_LEVEL':arg('log_level')},name='navigation_web')
         critical.append(web)
-    actions.append(LogInfo(msg='Domain 0: workspace modules only. Hardware drivers must already run. Web control DISABLED.'))
     # Register before spawning; fail the bringup if any owned top-level process exits.
     for process in critical:
         actions.append(RegisterEventHandler(OnProcessExit(target_action=process,on_exit=[
@@ -65,6 +67,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('workspace',description='Absolute source checkout path'),
         DeclareLaunchArgument('domain',default_value='0'),
+        DeclareLaunchArgument('log_level',default_value='error'),
         DeclareLaunchArgument('with_gps_bridge',default_value='true'),
         DeclareLaunchArgument('with_lio',default_value='true'),
         DeclareLaunchArgument('with_gnss_gate',default_value='true'),

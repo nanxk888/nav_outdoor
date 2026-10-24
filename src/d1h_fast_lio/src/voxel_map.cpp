@@ -420,8 +420,10 @@ void VoxelMapManager::StateEstimation(StatesGroup &state_propagat)
       total_residual += fabs(ptpl_list_[i].dis_to_plane_);
     }
     effct_feat_num_ = ptpl_list_.size();
-    cout << "[ LIO ] Raw feature num: " << feats_undistort_->size() << ", downsampled feature num:" << feats_down_size_ 
-         << " effective feature num: " << effct_feat_num_ << " average residual: " << total_residual / effct_feat_num_ << endl;
+    RCLCPP_DEBUG(rclcpp::get_logger("navigation_lio"),
+                 "LIO raw=%zu downsampled=%d effective=%d residual=%g",
+                 feats_undistort_->size(), feats_down_size_, effct_feat_num_,
+                 effct_feat_num_ ? total_residual / effct_feat_num_ : 0.0);
 
     /*** Computation of Measuremnt Jacobian matrix H and measurents covarience
      * ***/
@@ -944,7 +946,7 @@ void VoxelMapManager::mapSliding()
 {
   if((position_last_ - last_slide_position).norm() < config_setting_.sliding_thresh)
   {
-    std::cout<<RED<<"[DEBUG]: Last sliding length "<<(position_last_ - last_slide_position).norm()<<RESET<<"\n";
+    RCLCPP_DEBUG(rclcpp::get_logger("navigation_lio"), "Last sliding length: %g", (position_last_ - last_slide_position).norm());
     return;
   }
 
@@ -962,7 +964,7 @@ void VoxelMapManager::mapSliding()
                     (int64_t)loc_xyz[1] + config_setting_.half_map_size, (int64_t)loc_xyz[1] - config_setting_.half_map_size,
                     (int64_t)loc_xyz[2] + config_setting_.half_map_size, (int64_t)loc_xyz[2] - config_setting_.half_map_size);
   double t_sliding_end = omp_get_wtime();
-  std::cout<<RED<<"[DEBUG]: Map sliding using "<<t_sliding_end - t_sliding_start<<" secs"<<RESET<<"\n";
+  RCLCPP_DEBUG(rclcpp::get_logger("navigation_lio"), "Map sliding seconds: %g", t_sliding_end - t_sliding_start);
   return;
 }
 
@@ -985,6 +987,6 @@ void VoxelMapManager::clearMemOutOfMap(const int& x_max,const int& x_min,const i
       ++it;
     }
   }
-  std::cout<<RED<<"[DEBUG]: Delete "<<delete_voxel_cout<<" root voxels"<<RESET<<"\n";
+  RCLCPP_DEBUG(rclcpp::get_logger("navigation_lio"), "Deleted root voxels: %d", delete_voxel_cout);
   // std::cout<<RED<<"[DEBUG]: Delete "<<delete_voxel_cout<<" voxels using "<<delete_time<<" s"<<RESET<<"\n";
 }
