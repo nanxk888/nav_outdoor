@@ -158,6 +158,8 @@ class Control:
                         if self.phase not in ('IDLE','STOPPED'): raise ValueError('Already active')
                         if now-self.robot_time>.3 or not all(self.robot.get(k) for k in ('authorized','fsm_fresh','sdk_enabled','biped','interfaces_fresh')):
                             raise ValueError('Robot receiver/FSM not ready')
+                        if self.robot.get('fsm') not in ('idle','transform_up','loco'):
+                            raise ValueError('Start requires idle, transform_up or loco; do not interrupt lowering')
                         delay=self.config.get('stand_loco_delay_sec',4.)
                         if type(delay) not in (int,float) or not math.isfinite(delay) or not 4<=delay<=8:
                             raise ValueError('stand_loco_delay_sec must be 4..8 seconds')
@@ -185,16 +187,24 @@ class Control:
                 self.send('arm')
                 if self.robot.get('active') and not self.robot.get('fault') and self.robot.get('session') == self.session:
                     if self.robot.get('fsm')=='loco':self.transition('READY','Attached to existing loco at zero speed')
+                    elif self.robot.get('fsm')=='transform_up':
+                        self.transition('STAND_WAIT','Already transform_up: hold zero before loco, do not repeat standing')
                     else:self.transition('STANDING','Request transform_up')
             elif self.phase == 'STANDING':
                 if not getattr(self,'stand_sent_at',None):self.stand_sent_at=now
-                self.send('drive','transform_up')
                 acknowledged=(self.robot.get('operation')==self.operation and self.robot.get('last_mode')=='transform_up' and self.robot.get('fsm_valid') is True)
+                self.send('drive','' if acknowledged else 'transform_up')
                 completed=acknowledged and self.robot.get('fsm') in self.config.get('stand_ready_states',[])
                 timed=acknowledged and self.robot.get('fsm')=='transform_up' and now-self.stand_sent_at>=self.config.get('stand_loco_delay_sec',4.)
                 if completed or timed:
                     self.stand_sent_at=None
                     self.transition('ENTERING_LOCO','Request loco')
+            elif self.phase=='STAND_WAIT':
+                self.send('drive')
+                if self.robot.get('fsm')!='transform_up' or self.robot.get('fsm_valid') is not True:
+                    self.stop('Lost transform_up state while waiting; operator review required')
+                elif now-self.state_since>=self.config.get('stand_loco_delay_sec',4.):
+                    self.transition('ENTERING_LOCO','Existing transform_up held at zero for 4 seconds; request loco')
             elif self.phase == 'ENTERING_LOCO':
                 self.send('drive','loco')
                 if self.robot.get('fsm') == 'loco': self.transition('READY','loco, holding zero velocity')
@@ -217,7 +227,7 @@ class Control:
                 if self.phase=='READY' and getattr(self,'pose',None) is not None:fields['pose']=self.pose
                 self.send('drive',**fields)
             else: self.send('hello')
-            if self.phase in ('ARMING','STANDING','ENTERING_LOCO','LOWERING') and now-self.state_since>10.:
+            if self.phase in ('ARMING','STANDING','STAND_WAIT','ENTERING_LOCO','LOWERING') and now-self.state_since>10.:
                 self.stop('Robot transition timeout')
             if self.phase == 'GOAL_PENDING' and now-self.state_since>2.:
                 self.stop('Nav2 acknowledgement timeout')

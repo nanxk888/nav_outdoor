@@ -11,6 +11,7 @@ field('robotLower').onclick=async()=>{if(!confirm('确认实际机器人已停�
 field('robotPose').onclick=async()=>{const roll=field('rollValue').value,pitch=field('pitchValue').value;const r=Number(roll),p=Number(pitch);if(!roll.trim()||!pitch.trim()||!Number.isFinite(r)||!Number.isFinite(p)||Math.abs(r)>11.4||Math.abs(p)>22.9){field('controlResult').textContent='姿态角为空或越界';return}if(!confirm('确认停稳且loco稳定？将改变机身姿态，必要时使用硬件急停。'))return;try{await command('pose',{roll_rad:r*Math.PI/180,pitch_rad:p*Math.PI/180});field('controlResult').textContent='姿态请求已排队；接收成功不代表机身已达到目标角度。'}catch(e){field('controlResult').textContent='姿态请求失败或结果未知：'+e.message}};
 window.updateControl=s=>{field('controlState').textContent=s?JSON.stringify(s,null,2):'网关断开，机器人停止状态未知，请确认硬件安全';
  const phases={DISABLED:'控制未授权',IDLE:'控制待机',STANDING:'请求站立中',ARMING:'连接接收器',ENTERING_LOCO:'进入loco',READY:'loco零速度待命',LOWER_BRAKING:'落下前零速度保持',LOWERING:'请求落下中',GOAL_PENDING:'等待导航确认',NAVIGATING:'导航任务中',STOPPED:'任务已停止'};
+ phases.STAND_WAIT='已在transform_up，零速度等待后切换loco';
  field('controlBrief').textContent=s?(phases[s.phase]||s.phase):'控制状态未知';
  field('robotLower').disabled=!s?.enabled||s.phase!=='READY';
  field('robotPose').disabled=!s?.enabled||s.phase!=='READY'||!s.robot?.pose_enabled;
