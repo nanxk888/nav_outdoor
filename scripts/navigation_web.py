@@ -6,12 +6,13 @@ import queue
 import xml.etree.ElementTree as ET
 import threading
 import time
+import struct
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import rclpy
 from rclpy.qos import qos_profile_sensor_data
-from sensor_msgs.msg import NavSatFix
+from sensor_msgs.msg import NavSatFix,PointCloud2
 from nav_msgs.msg import Odometry, Path as RosPath
 from std_msgs.msg import String
 
@@ -20,6 +21,39 @@ lock = threading.Lock()
 samples = {}
 operator_settings = {}
 control = None
+last_cloud_receive=-100.
+
+
+def cloud(msg):
+    global last_cloud_receive
+    now=time.monotonic()
+    if now-last_cloud_receive<.45:return
+    last_cloud_receive=now
+    stamp=msg.header.stamp.sec+msg.header.stamp.nanosec/1e9
+    age=time.time()-stamp
+    fields={f.name:f for f in msg.fields}
+    points=[]
+    try:
+        if not -.1<=age<=.5:raise ValueError('stale cloud measurement')
+        count=msg.width*msg.height
+        if count>100000 or len(msg.data)>8000000 or msg.point_step<=0:raise ValueError('cloud budget/layout')
+        if msg.row_step<msg.width*msg.point_step or len(msg.data)<msg.row_step*msg.height:raise ValueError('truncated cloud')
+        formats=[]
+        for name in ('x','y','z'):
+            f=fields[name]
+            if f.datatype not in (7,8) or f.count!=1:raise ValueError('XYZ must be float32/64')
+            size=4 if f.datatype==7 else 8
+            if f.offset<0 or f.offset+size>msg.point_step:raise ValueError('invalid field offset')
+            formats.append((f.offset,('>' if msg.is_bigendian else '<')+('f' if size==4 else 'd')))
+        for i in range(0,count,max(1,math.ceil(count/2000))):
+            offset=(i//msg.width)*msg.row_step+(i%msg.width)*msg.point_step
+            xyz=[struct.unpack_from(fmt,msg.data,offset+off)[0] for off,fmt in formats]
+            if all(math.isfinite(v) for v in xyz):points.append([round(v,3) for v in xyz])
+        value={'valid':True,'frame':msg.header.frame_id,'stamp':stamp,'measurement_age_sec':age,
+               'points':points,'input_points':count,'preview_only':True}
+    except (ValueError,KeyError,struct.error) as exc:
+        value={'valid':False,'points':[],'reason':str(exc),'preview_only':True}
+    save('nav_cloud',value)
 
 
 def load_osm():
@@ -164,9 +198,11 @@ def main():
     from navigation_control import Control
     control = Control(node)
     subs = [node.create_subscription(NavSatFix, '/hardware/gnss/fix', fix, qos_profile_sensor_data),
+            node.create_subscription(PointCloud2,'/livox/lidar/pointcloud_nav',cloud,qos_profile_sensor_data),
             node.create_subscription(Odometry, '/navigation/lio/odometry', odom, qos_profile_sensor_data)]
     for topic, key in [('/localization/gnss/status', 'gps_status'),
-                       ('/navigation/lio/status', 'lio_status')]:
+                       ('/navigation/lio/status', 'lio_status'),
+                       ('/navigation/cloud_filter/status','cloud_status')]:
         subs.append(node.create_subscription(String, topic, lambda m, k=key: save(k, m.data), 10))
     subs.append(node.create_subscription(RosPath, '/plan', lambda m: save('plan', {
         'frame': m.header.frame_id, 'points': [[p.pose.position.x, p.pose.position.y]

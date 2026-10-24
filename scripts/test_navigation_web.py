@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import sys
 import threading
+import struct
+import time
 import types
 import unittest
 from unittest.mock import patch
@@ -14,7 +16,7 @@ from urllib.error import HTTPError
 def load():
     modules = {'rclpy': types.ModuleType('rclpy')}
     for name, symbols in [('rclpy.qos',['qos_profile_sensor_data']),
-                          ('sensor_msgs.msg',['NavSatFix']),('nav_msgs.msg',['Odometry','Path']),
+                          ('sensor_msgs.msg',['NavSatFix','PointCloud2']),('nav_msgs.msg',['Odometry','Path']),
                           ('std_msgs.msg',['String'])]:
         m=types.ModuleType(name)
         for s in symbols:setattr(m,s,object)
@@ -26,6 +28,25 @@ def load():
 
 
 class WebTests(unittest.TestCase):
+    def test_cloud_preview_layout_and_nan(self):
+        field=lambda n,i:types.SimpleNamespace(name=n,offset=i*4,datatype=7,count=1)
+        stamp=time.time();sec=int(stamp)
+        msg=types.SimpleNamespace(header=types.SimpleNamespace(frame_id='lio_odom',stamp=types.SimpleNamespace(sec=sec,nanosec=int((stamp-sec)*1e9))),
+             fields=[field(n,i) for i,n in enumerate(('x','y','z'))],width=1,height=2,point_step=12,row_step=16,is_bigendian=False,
+             data=struct.pack('<fff',1.,2.,3.)+b'\0'*4+struct.pack('<fff',float('nan'),0.,0.)+b'\0'*4)
+        self.m.last_cloud_receive=-100.;self.m.cloud(msg)
+        result=self.m.samples['nav_cloud']['value']
+        self.assertTrue(result['valid']);self.assertEqual(result['points'],[[1.,2.,3.]])
+        msg.header.stamp.sec-=10;self.m.last_cloud_receive=-100.;self.m.cloud(msg)
+        self.assertFalse(self.m.samples['nav_cloud']['value']['valid'])
+
+    def test_preview_points_bounded(self):
+        stamp=time.time();sec=int(stamp)
+        fields=[types.SimpleNamespace(name=n,offset=i*4,datatype=7,count=1) for i,n in enumerate(('x','y','z'))]
+        msg=types.SimpleNamespace(header=types.SimpleNamespace(frame_id='lio_odom',stamp=types.SimpleNamespace(sec=sec,nanosec=int((stamp-sec)*1e9))),
+             fields=fields,width=20001,height=1,point_step=12,row_step=20001*12,is_bigendian=False,data=struct.pack('<fff',1.,2.,3.)*20001)
+        self.m.last_cloud_receive=-100.;self.m.cloud(msg)
+        self.assertLessEqual(len(self.m.samples['nav_cloud']['value']['points']),2000)
     @classmethod
     def setUpClass(cls):
         cls.m=load();cls.m.osm_data=cls.m.load_osm()

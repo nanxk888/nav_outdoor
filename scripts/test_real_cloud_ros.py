@@ -12,6 +12,7 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
 from d1h_nav2.real_cloud_filter import RealCloudFilter
+import navigation_web as dashboard
 
 
 def main():
@@ -20,6 +21,7 @@ def main():
     executor=SingleThreadedExecutor();executor.add_node(node);executor.add_node(probe)
     outputs=[];clears=[]
     subscriptions=[probe.create_subscription(PointCloud2,'/livox/lidar/pointcloud_nav',outputs.append,5),
+                   probe.create_subscription(PointCloud2,'/livox/lidar/pointcloud_nav',dashboard.cloud,5),
                    probe.create_subscription(PointCloud2,'/livox/lidar/pointcloud_clear',clears.append,5)]
     odom_pub=probe.create_publisher(Odometry,'/navigation/lio/odometry',5)
     cloud_pub=probe.create_publisher(PointCloud2,'/navigation/lio/deskewed_cloud',5)
@@ -42,6 +44,8 @@ def main():
         assert outputs and clears,'missing output topics'
         assert outputs[-1].header.stamp==stamp and outputs[-1].header.frame_id=='lio_odom'
         assert outputs[-1].width==1 and clears[-1].width>1000,'ground/obstacle classification'
+        preview=dashboard.samples['nav_cloud']['value']
+        assert preview['valid'] and preview['frame']=='lio_odom' and len(preview['points'])==1,'web preview serialization'
         stamp=send(origin_z=.3);spin(.3)
         assert outputs[-1].header.stamp==stamp and outputs[-1].width==1,'body rising must not shift ground'
         before=(len(outputs),len(clears));send(height=2.5);spin(.3)

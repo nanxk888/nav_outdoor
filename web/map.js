@@ -4,7 +4,7 @@
  const $=id=>document.getElementById(id);
  const gpsCanvas=$('osm'),lioCanvas=$('plot');
  const cameras={gps:new Camera(.1),lio:new Camera(45)};
- let features=[],bounds=null,loadError='',gps=null,lio=null,online=false,receivedAt=0;
+ let features=[],bounds=null,loadError='',gps=null,lio=null,navCloud=null,cloudStatus=null,online=false,receivedAt=0;
  let active='lio',mode='pan',goal=null,heading=null,follow=true,trajectory=[],lastStamp=null;
  const notify=(message,tone)=>window.NavUI?.notify(message,tone);
  const finitePoint=p=>Array.isArray(p)&&p.length>=2&&p.slice(0,2).every(Number.isFinite);
@@ -39,6 +39,22 @@
   for(let x=Math.ceil(lo[0]/step)*step;x<=hi[0];x+=step){const p=camera.screen([x,0]);ctx.beginPath();ctx.moveTo(p[0],0);ctx.lineTo(p[0],camera.height);ctx.stroke()}
   for(let y=Math.ceil(lo[1]/step)*step;y<=hi[1];y+=step){const p=camera.screen([0,y]);ctx.beginPath();ctx.moveTo(0,p[1]);ctx.lineTo(camera.width,p[1]);ctx.stroke()}
   const origin=camera.screen([0,0]);ctx.fillStyle='#688a99';ctx.font='11px system-ui';ctx.fillText('LIO起点',origin[0]+8,origin[1]-8);
+  const cv=navCloud?.value;
+  let reason='等待导航障碍点云';
+  if(!online)reason='网关断开，障碍预览已隐藏';
+  else if(cv){
+   if(!cv.valid)reason='点云无效，已隐藏';
+   else if(age(navCloud)>=1.5||cv.measurement_age_sec+age(navCloud)>=1.5)reason='点云已过期，已隐藏';
+   else if(!goodLio())reason='LIO无新鲜位置，已隐藏障碍';
+   else if(cv.frame!==lio.value.frame)reason='点云与LIO坐标系不一致，拒绝叠加';
+   else if(!cloudStatus||age(cloudStatus)>=1.5||cloudStatus.value?.ready!==true)reason='地面过滤状态无效，已隐藏';
+   else{
+    ctx.fillStyle='#ffb454';const size=Math.max(2,Math.min(5,.05*camera.scale));
+    for(const xyz of cv.points.slice(0,2000)){if(!finitePoint(xyz))continue;const p=camera.screen(xyz);ctx.fillRect(p[0]-size/2,p[1]-size/2,size,size)}
+    reason=`橙色：实时障碍点 ${cv.points.length} / ${cv.input_points}（非Nav2代价地图）`;
+   }
+  }
+  $('cloudHint').textContent=reason;
   ctx.strokeStyle=goodLio()?'#6bdcc6':'#637e86';ctx.lineWidth=2;ctx.beginPath();trajectory.forEach((p,i)=>{const v=camera.screen(p);i?ctx.lineTo(...v):ctx.moveTo(...v)});ctx.stroke();
   if(position){const p=camera.screen(position);marker(ctx,p,goodLio()?'#80eea4':'#718690',6);
    const q=lio.value.orientation;
@@ -72,7 +88,9 @@
  $('gpsHome').onclick=()=>{show('gps');if(!online){notify('网关未连接，无法定位GPS','error');return}if(!gps){notify('尚未收到GPS数据，请检查驱动和桥接','error');return}if(age(gps)>=2){notify('GPS数据已过期，无法定位','error');return}if(!goodGps()){notify('当前无GPS信号，尚未获得有效经纬度','error');return}
   const p=project(gps.value.longitude,gps.value.latitude);cameras.gps.x=p[0];cameras.gps.y=p[1];cameras.gps.scale=Math.max(cameras.gps.scale,1.5);draw();notify('定位成功：已居中显示原始GPS位置（非融合定位）')};
  $('lioHome').onclick=()=>{show('lio');follow=true;draw();notify(goodLio()?'已跟随LIO相对位置':'LIO暂无新鲜数据，等待输入',goodLio()?'info':'error')};
- window.NavMaps={show,draw,update(response,connected){online=connected;gps=response?.samples?.gps||null;lio=response?.samples?.lio||null;receivedAt=performance.now();
+ window.NavMaps={show,draw,update(response,connected){online=connected;gps=response?.samples?.gps||null;lio=response?.samples?.lio||null;navCloud=response?.samples?.nav_cloud||null;cloudStatus=response?.samples?.cloud_status||null;
+   if(cloudStatus&&typeof cloudStatus.value==='string'){try{cloudStatus={...cloudStatus,value:JSON.parse(cloudStatus.value)}}catch(e){cloudStatus=null}}
+   receivedAt=performance.now();
    if(goodLio()&&lio.value.stamp!==lastStamp){if(lastStamp!==null&&lio.value.stamp<lastStamp){trajectory=[];follow=true;notify('LIO时间轴重置，已清除旧显示轨迹')}lastStamp=lio.value.stamp;trajectory.push(lio.value.position.slice(0,2));if(trajectory.length>2000)trajectory.shift()}draw()}};
  new ResizeObserver(draw).observe($('workspace'));new ResizeObserver(draw).observe($('gpsView'));new ResizeObserver(draw).observe($('lioView'));
  fetch('/api/osm').then(r=>{if(!r.ok)throw Error(r.status);return r.json()}).then(data=>{features=data.features.map(f=>({road:!!f.properties.highway,points:f.geometry.coordinates.map(p=>project(...p))}));for(const f of features)for(const p of f.points){if(!bounds)bounds=[...p,...p];else{bounds[0]=Math.min(bounds[0],p[0]);bounds[1]=Math.min(bounds[1],p[1]);bounds[2]=Math.max(bounds[2],p[0]);bounds[3]=Math.max(bounds[3],p[1])}}draw()}).catch(e=>{loadError='地图加载失败：'+e.message;notify(loadError,'error');draw()});
