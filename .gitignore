@@ -49,6 +49,9 @@ log/
 !/scripts/test_robot_udp_pair.py
 !/scripts/test_fsm_bridge_ros.py
 !/scripts/test_web_control.js
+!/scripts/start_d1_receiver.sh
+!/scripts/d1_receiver_launcher.py
+!/scripts/test_d1_launcher.py
 !/scripts/robot_udp_receiver.py
 !/scripts/test_robot_wire.py
 !/scripts/test_navigation_control.py
