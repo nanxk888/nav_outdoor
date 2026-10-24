@@ -1,7 +1,7 @@
 let heartbeatEnabled=false, pendingHeartbeat=false;
 const field=id=>document.getElementById(id);
-async function command(kind,body={}){const token=field('controlToken').value;
- const r=await fetch('/api/control/'+kind,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(body),signal:AbortSignal.timeout(1500)});
+async function command(kind,body={}){
+ const r=await fetch('/api/control/'+kind,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(1500)});
  if(!r.ok)throw Error(await r.text());return r.json();}
 for(const [id,kind] of [['robotStart','start'],['robotNavigate','navigate'],['robotStop','stop']]){
  field(id).onclick=async()=>{if(kind!=='stop'&&!confirm(kind==='start'?'确认现场安全、急停可用、SDK模式和接收端已授权？将使机器人站立。':'确认目标预览并请求真实导航？'))return;

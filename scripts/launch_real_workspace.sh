@@ -12,5 +12,5 @@ source install/setup.bash
 export ROS_DOMAIN_ID=0 ROS_LOCALHOST_ONLY=0 RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 unset CYCLONEDDS_URI FASTRTPS_DEFAULT_PROFILES_FILE FASTDDS_DEFAULT_PROFILES_FILE ROS_DISCOVERY_SERVER
 unset NXK_CONTROL_CONFIG
-# Keep the caller's private web token only for explicit control_config launch use.
+# Web control needs explicit control_config; browser tokens are no longer used.
 exec ros2 launch d1h_nav2 real_workspace.launch.py workspace:="$WORKSPACE_DIR" "$@"

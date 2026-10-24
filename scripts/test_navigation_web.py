@@ -67,6 +67,10 @@ class WebTests(unittest.TestCase):
     def test_no_control_token(self):
         with patch.dict('os.environ',{},clear=True):
             with self.assertRaises(HTTPError) as c:self.post('/api/control/start',{})
+        self.assertEqual(c.exception.code,400)
+
+    def test_control_still_requires_same_origin(self):
+        with self.assertRaises(HTTPError) as c:self.post('/api/control/start',{},False)
         self.assertEqual(c.exception.code,403)
 
     def test_state(self):
@@ -76,11 +80,11 @@ class WebTests(unittest.TestCase):
     def test_pose_lower_authenticated_validation(self):
         token='local-test-token-not-a-secret-123456789'
         old=self.m.control;received=[]
-        self.m.control=types.SimpleNamespace(enqueue=lambda kind,value:received.append((kind,value)) or {'queued':True})
+        self.m.control=types.SimpleNamespace(status=lambda:{'enabled':True},enqueue=lambda kind,value:received.append((kind,value)) or {'queued':True})
         try:
             with patch.dict('os.environ',{'NXK_WEB_TOKEN':token}):
-                with self.post('/api/control/pose',{'pitch_rad':.1},token=token) as r:self.assertEqual(r.status,202)
-                with self.post('/api/control/lower',{'confirm_stationary':True},token=token) as r:self.assertEqual(r.status,202)
+                with self.post('/api/control/pose',{'pitch_rad':.1}) as r:self.assertEqual(r.status,202)
+                with self.post('/api/control/lower',{'confirm_stationary':True}) as r:self.assertEqual(r.status,202)
                 for path,body in (('pose',{'roll_rad':.21}),('lower',{})):
                     with self.assertRaises(HTTPError) as c:self.post('/api/control/'+path,body,token=token)
                     self.assertEqual(c.exception.code,400)

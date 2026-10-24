@@ -2,7 +2,6 @@
 import json
 import math
 import os
-import hmac
 import queue
 import xml.etree.ElementTree as ET
 import threading
@@ -82,9 +81,8 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError('invalid body length')
             value = json.loads(self.rfile.read(size))
             if is_control:
-                token = os.environ.get('NXK_WEB_TOKEN', '')
-                if len(token) < 32 or not hmac.compare_digest(self.headers.get('Authorization',''), 'Bearer '+token):
-                    self.send_error(403); return
+                if not control.status().get('enabled'):
+                    raise ValueError('Hardware control configuration is disabled')
                 kind = self.path.rsplit('/',1)[-1]
                 if kind not in ('start','stop','heartbeat','navigate','lower','pose'):
                     raise ValueError('invalid control request')

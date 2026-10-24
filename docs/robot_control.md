@@ -123,6 +123,8 @@ FSM请求按操作ID只下发一次，持续心跳不会反复触发起立。CLI
 
 ## 5. 接入网页（独立显式授权）
 
+按操作员要求已取消网页Bearer令牌与输入框：有权访问网页的人即可点击控制。后端仍只绑定127.0.0.1、检查同源Origin，并要求私有硬件授权配置；不要暴露公网或转发给不可信用户。D1 UDP共享密钥未取消，用于防伪造网线指令。输入/删除网页令牌不再影响按钮，按钮由后端控制阶段和硬件配置决定。
+
 本次修改了统一launch，Orin上先加载原有依赖并重新安装该包（不必重新编译LIO）：
 
 ```bash
@@ -146,9 +148,7 @@ survey_confirmed 在仅测试站立/姿态时可保留 false；导航仍会被�
 
 ```bash
 cd /workspace/nxk
-# 单独生成网页令牌，不复用UDP密钥；输入网页控制抽屉，不放URL。
-export NXK_WEB_TOKEN="$(openssl rand -hex 32)"
-# 通过私有方式保存本终端令牌供浏览器输入，不发送给他人。
+# 网页不再需要令牌；仅限本机/可信SSH隧道访问。
 bash scripts/launch_real_workspace.sh control_config:=/root/.config/nxk/control.json
 ```
 

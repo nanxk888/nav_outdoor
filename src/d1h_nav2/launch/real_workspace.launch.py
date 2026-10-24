@@ -59,7 +59,6 @@ def configure(context):
     if enabled('with_web'):
         web=ExecuteProcess(cmd=[sys.executable,str(root/'scripts/navigation_web.py')],output='screen',
                            additional_env={'NXK_CONTROL_CONFIG':arg('control_config'),
-                                           'NXK_WEB_TOKEN':os.environ.get('NXK_WEB_TOKEN','') if arg('control_config') else '',
                                            'NXK_LOG_LEVEL':arg('log_level')},name='navigation_web')
         critical.append(web)
     # Register before spawning; fail the bringup if any owned top-level process exits.
