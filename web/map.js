@@ -1,45 +1,80 @@
-// Offline OSM vector preview. Coordinates are longitude, latitude (WGS84).
-const mapCanvas = document.getElementById('osm'), paint = mapCanvas.getContext('2d');
-let features = [], bounds = null, gps = null, center = null, zoom = 1;
-let online = false;
-let pickMode=null, goal=null, heading=null, down=null, projection=null;
-async function submit(kind,value){try{const r=await fetch('/api/operator/'+kind,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value),signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error(r.status);await r.json();document.getElementById('operatorResult').textContent='已保存预览，未执行：'+JSON.stringify(value)+'。未接定位/导航；目标尚未审核道路可达性。'}catch(e){document.getElementById('operatorResult').textContent='保存失败或结果未知，请勿视为已执行：'+e.message}}
-document.getElementById('pickGoal').onclick=()=>{pickMode='goal';document.getElementById('operatorResult').textContent='点击地图设置目标（仅预览）'};
-document.getElementById('pickHeading').onclick=()=>{pickMode='heading';document.getElementById('operatorResult').textContent='从机头起点向朝向拖拽（仅取方向，不设置起始位置）'};
-document.getElementById('saveHeading').onclick=()=>{const v=Number(document.getElementById('headingValue').value);if(Number.isFinite(v)&&v>=0&&v<360){heading=v;submit('heading',{heading_deg:v});draw()}};
-function eventPoint(e){const r=mapCanvas.getBoundingClientRect();return [(e.clientX-r.left)*850/r.width,(e.clientY-r.top)*480/r.height]}
-mapCanvas.addEventListener('pointerdown',e=>{down=eventPoint(e);mapCanvas.setPointerCapture(e.pointerId)});
-mapCanvas.addEventListener('pointerup',e=>{if(!down||!projection)return;const end=eventPoint(e);
-if(pickMode==='goal'){const [ox,oy,s]=projection;const lon=ox+(end[0]-425)/s;const my=oy-(end[1]-240)/s;const lat=(2*Math.atan(Math.exp(my*Math.PI/180))-Math.PI/2)*180/Math.PI;goal=[lon,lat];submit('goal',{longitude:lon,latitude:lat})}
-if(pickMode==='heading'&&Math.hypot(end[0]-down[0],end[1]-down[1])>10){heading=(Math.atan2(end[0]-down[0],down[1]-end[1])*180/Math.PI+360)%360;document.getElementById('headingValue').value=heading.toFixed(1);submit('heading',{heading_deg:heading})}down=null;pickMode=null;draw()});
-function xy(p) { return [p[0], Math.log(Math.tan(Math.PI / 4 + Math.max(-85, Math.min(85, p[1])) * Math.PI / 360)) * 180 / Math.PI]; }
-function draw() {
-  paint.clearRect(0, 0, 850, 480);
-  if (!bounds) return;
-  const origin = center || [(bounds[0]+bounds[2])/2,(bounds[1]+bounds[3])/2];
-  const scale = Math.min(790 / Math.max(bounds[2]-bounds[0],1e-8), 420 / Math.max(bounds[3]-bounds[1],1e-8))*zoom;
-  projection=[...origin,scale];
-  const pixel = p => { const v=xy(p);return [425+(v[0]-origin[0])*scale,240-(v[1]-origin[1])*scale]; };
-  for (const f of features) {
-    paint.strokeStyle=f.properties.highway?'#a4cbd5':'#506978';paint.lineWidth=f.properties.highway?2:1;
-    paint.beginPath();f.geometry.coordinates.forEach((p,i)=>{const v=pixel(p);i?paint.lineTo(...v):paint.moveTo(...v)});paint.stroke();
-  }
-  const current = online && gps && gps.receive_age_sec < 2 && gps.value.valid;
-  if(goal){const p=pixel(goal);paint.strokeStyle='#ffbe55';paint.beginPath();paint.arc(...p,9,0,Math.PI*2);paint.stroke();paint.fillStyle='#ffbe55';paint.fillText('目标预览',p[0]+12,p[1])}
-  if(heading!==null){const a=heading*Math.PI/180;paint.strokeStyle='#ffbe55';paint.beginPath();paint.moveTo(50,60);paint.lineTo(50+30*Math.sin(a),60-30*Math.cos(a));paint.stroke();paint.fillStyle='#ffbe55';paint.fillText('初始方向预览 '+heading.toFixed(1)+'°',15,110)}
-  if(current){const p=pixel([gps.value.longitude,gps.value.latitude]);paint.fillStyle='#76ef78';paint.beginPath();paint.arc(...p,7,0,Math.PI*2);paint.fill();
-    if(p[0]<0||p[0]>850||p[1]<0||p[1]>480)document.getElementById('mapState').textContent='GPS在当前视野外，点击定位GPS；本地OSM可能不覆盖该位置。';
-  }
-  if(!current)document.getElementById('mapState').textContent='无新鲜有效GPS定位；地图仅显示本地OSM，不绘制当前位置。';
-}
-window.updateGpsMap = (sample, connected=true) => {
-  gps=sample;online=connected;
-  document.getElementById('mapState').textContent=connected&&gps?.value.valid&&gps.receive_age_sec<2?'原始GPS天线位置（非融合位置）；道路不代表已审核通行许可。':'等待有效GPS';draw();
-};
-document.getElementById('mapHome').onclick=()=>{center=null;zoom=1;draw()};
-document.getElementById('gpsHome').onclick=()=>{if(online&&gps?.value.valid&&gps.receive_age_sec<2){center=xy([gps.value.longitude,gps.value.latitude]);draw()}};
-mapCanvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.25,Math.min(64,zoom*(e.deltaY<0?1.2:1/1.2)));draw()},{passive:false});
-fetch('/api/osm').then(r=>{if(!r.ok)throw Error(r.status);return r.json()}).then(data=>{
-  features=data.features;for(const f of features)for(const p of f.geometry.coordinates){const v=xy(p);if(!bounds)bounds=[...v,...v];else{bounds[0]=Math.min(bounds[0],v[0]);bounds[1]=Math.min(bounds[1],v[1]);bounds[2]=Math.max(bounds[2],v[0]);bounds[3]=Math.max(bounds[3],v[1])}}draw();
-}).catch(e=>document.getElementById('mapState').textContent='OSM加载失败：'+e.message);
-setInterval(()=>{if(gps)gps.receive_age_sec+=.5;draw()},500);
+/* Offline OSM + independent LIO viewport. Never invent map/odom alignment. */
+(() => {
+ const {Camera,project,unproject}=NavViewport;
+ const $=id=>document.getElementById(id);
+ const gpsCanvas=$('osm'),lioCanvas=$('plot');
+ const cameras={gps:new Camera(.1),lio:new Camera(45)};
+ let features=[],bounds=null,loadError='',gps=null,lio=null,online=false,receivedAt=0;
+ let active='lio',mode='pan',goal=null,heading=null,follow=true,trajectory=[],lastStamp=null;
+ const notify=(message,tone)=>window.NavUI?.notify(message,tone);
+ const finitePoint=p=>Array.isArray(p)&&p.length>=2&&p.slice(0,2).every(Number.isFinite);
+ function age(sample){return sample?sample.receive_age_sec+(performance.now()-receivedAt)/1000:Infinity}
+ function goodGps(){return online&&age(gps)<2&&gps?.value.valid&&Number.isFinite(gps.value.longitude)&&Number.isFinite(gps.value.latitude)}
+ function goodLio(){return online&&age(lio)<2&&finitePoint(lio?.value.position)}
+ function context(canvas,camera){
+  const r=canvas.getBoundingClientRect(),dpr=Math.min(2,window.devicePixelRatio||1);
+  if(r.width<1||r.height<1)return null;
+  if(camera.width>1&&(camera.width!==r.width||camera.height!==r.height))camera.scale*=Math.min(r.width/camera.width,r.height/camera.height);
+  camera.width=r.width;camera.height=r.height;
+  if(canvas.width!==Math.round(r.width*dpr)||canvas.height!==Math.round(r.height*dpr)){canvas.width=Math.round(r.width*dpr);canvas.height=Math.round(r.height*dpr)}
+  const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,r.width,r.height);ctx.lineJoin='round';return ctx;
+ }
+ function marker(ctx,p,color,r=5){ctx.fillStyle=color;ctx.beginPath();ctx.arc(p[0],p[1],r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#0b2027';ctx.lineWidth=2;ctx.stroke()}
+ function drawGps(){
+  const camera=cameras.gps,ctx=context(gpsCanvas,camera);if(!ctx)return;
+  if(bounds&&!camera.fitted){camera.fit(bounds);camera.fitted=true}
+  for(const f of features){ctx.lineWidth=f.road?1.6:1;ctx.strokeStyle=f.road?'#91b9c4':'#345463';ctx.beginPath();f.points.forEach((p,i)=>{const v=camera.screen(p);i?ctx.lineTo(...v):ctx.moveTo(...v)});ctx.stroke()}
+  if(goal){const p=camera.screen(project(...goal));ctx.strokeStyle='#ffcb79';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(...p,5,0,Math.PI*2);ctx.moveTo(p[0]-9,p[1]);ctx.lineTo(p[0]+9,p[1]);ctx.moveTo(p[0],p[1]-9);ctx.lineTo(p[0],p[1]+9);ctx.stroke();if(active==='gps'){ctx.fillStyle='#ffcb79';ctx.font='12px system-ui';ctx.fillText('目标预览',p[0]+12,p[1]-10)}}
+  if(goodGps())marker(ctx,camera.screen(project(gps.value.longitude,gps.value.latitude)),'#79ed96',6);
+  $('mapState').textContent=loadError||(!online?'数据网关未连接':!gps?'尚未收到GPS数据':age(gps)>=2?'GPS数据已过期':!gps.value.valid?'当前无GPS信号，等待有效定位':'原始GPS天线位置 · 非融合位置');
+ }
+ function drawLio(){
+  const camera=cameras.lio,ctx=context(lioCanvas,camera);if(!ctx)return;
+  const position=finitePoint(lio?.value.position)?lio.value.position:null;
+  if(follow&&position){camera.x=position[0];camera.y=position[1]}
+  const target=70/camera.scale,power=10**Math.floor(Math.log10(target));
+  const step=[1,2,5,10].map(n=>n*power).find(n=>n>=target)||power*10;
+  const lo=camera.world([0,camera.height]),hi=camera.world([camera.width,0]);
+  ctx.strokeStyle='#203944';ctx.lineWidth=1;
+  for(let x=Math.ceil(lo[0]/step)*step;x<=hi[0];x+=step){const p=camera.screen([x,0]);ctx.beginPath();ctx.moveTo(p[0],0);ctx.lineTo(p[0],camera.height);ctx.stroke()}
+  for(let y=Math.ceil(lo[1]/step)*step;y<=hi[1];y+=step){const p=camera.screen([0,y]);ctx.beginPath();ctx.moveTo(0,p[1]);ctx.lineTo(camera.width,p[1]);ctx.stroke()}
+  const origin=camera.screen([0,0]);ctx.fillStyle='#688a99';ctx.font='11px system-ui';ctx.fillText('LIO起点',origin[0]+8,origin[1]-8);
+  ctx.strokeStyle=goodLio()?'#6bdcc6':'#637e86';ctx.lineWidth=2;ctx.beginPath();trajectory.forEach((p,i)=>{const v=camera.screen(p);i?ctx.lineTo(...v):ctx.moveTo(...v)});ctx.stroke();
+  if(position){const p=camera.screen(position);marker(ctx,p,goodLio()?'#80eea4':'#718690',6);
+   const q=lio.value.orientation;
+   if(Array.isArray(q)&&q.length===4&&q.every(Number.isFinite)){const [x,y,z,w]=q,yaw=Math.atan2(2*(w*z+x*y),1-2*(y*y+z*z));ctx.strokeStyle='#a0eed8';ctx.beginPath();ctx.moveTo(...p);ctx.lineTo(p[0]+24*Math.cos(yaw),p[1]-24*Math.sin(yaw));ctx.stroke()}}
+  $('lioHome').textContent=follow?'LIO 跟随中':'跟随 LIO';
+ }
+ function draw(){drawGps();drawLio();const c=cameras[active],factor=active==='gps'?Math.cos(unproject(c.x,c.y)[1]*Math.PI/180):1;const m=100/c.scale*factor;$('scaleLabel').textContent=`100像素 ≈ ${m>=1?m.toFixed(1)+' m':(m*100).toFixed(1)+' cm'}${active==='gps'?' · 缩放不代表定位精度':''}`}
+ function setMode(value){mode=value;$('gpsView').classList.toggle('selecting',value!=='pan');$('pickGoal').textContent=value==='goal'?'取消选点':'＋ 选择目标'}
+ function show(view){active=view;for(const v of ['gps','lio']){$(v+'View').classList.toggle('is-main',v===view);$(v+'View').classList.toggle('is-mini',v!==view)}setMode('pan');$('swapView').textContent=view==='lio'?'切换全局地图':'切换LIO视图';requestAnimationFrame(draw)}
+ async function submit(kind,value){try{const r=await fetch('/api/operator/'+kind,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value),signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error(r.status);await r.json();$('operatorResult').textContent=kind==='goal'?'目标预览已保存，未下发导航；道路可达性尚未审核。':'方向预览已保存，未修改融合定位。';notify(kind==='goal'?'目标预览已保存，未启动导航':'初始方向预览已保存，未执行');return true}catch(e){$('operatorResult').textContent='保存失败或结果未知：'+e.message;notify('保存失败或结果未知，请重试','error');return false}}
+ function point(canvas,e){const r=canvas.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top]}
+ for(const [view,canvas] of [['gps',gpsCanvas],['lio',lioCanvas]]){
+  let down=null,last=null,moved=false,mini=false;
+  canvas.addEventListener('pointerdown',e=>{if(e.button!==0)return;mini=active!==view;down=point(canvas,e);last=down;moved=false;canvas.setPointerCapture(e.pointerId)});
+  canvas.addEventListener('pointermove',e=>{if(!down)return;const p=point(canvas,e);if(Math.hypot(p[0]-down[0],p[1]-down[1])>5)moved=true;if(!mini&&moved&&!(view==='gps'&&mode==='heading')){cameras[view].pan(p[0]-last[0],p[1]-last[1]);if(view==='lio')follow=false;draw()}last=p});
+  canvas.addEventListener('pointerup',async e=>{if(!down)return;const p=point(canvas,e),start=down;down=null;
+   if(mini){if(!moved)show(view);return}
+   if(view==='gps'&&mode==='goal'&&!moved){const v=unproject(...cameras.gps.world(p));if(!bounds){notify('地图尚未就绪','error');return}const world=project(...v);if(world[0]<bounds[0]||world[0]>bounds[2]||world[1]<bounds[1]||world[1]>bounds[3]){notify('目标超出本地地图覆盖范围','error');return}goal=v;$('targetSummary').textContent='保存目标中…';draw();setMode('pan');if(await submit('goal',{longitude:v[0],latitude:v[1]}))$('targetSummary').textContent=`${v[1].toFixed(7)}° N, ${v[0].toFixed(7)}° E`;else $('targetSummary').textContent='目标未确认保存';}
+   else if(view==='gps'&&mode==='heading'&&moved){heading=(Math.atan2(p[0]-start[0],start[1]-p[1])*180/Math.PI+360)%360;$('headingValue').value=heading.toFixed(1);$('headingSummary').textContent=`方向预览 ${heading.toFixed(1)}°`;setMode('pan');await submit('heading',{heading_deg:heading})}
+  });
+  canvas.addEventListener('pointercancel',()=>{down=null;last=null});
+  canvas.addEventListener('wheel',e=>{e.preventDefault();if(active!==view)return;cameras[view].zoom(Math.exp(-Math.max(-200,Math.min(200,e.deltaY))*.003),point(canvas,e));draw()},{passive:false});
+ }
+ document.querySelectorAll('[data-view]').forEach(button=>button.onclick=()=>show(button.dataset.view));
+ $('swapView').onclick=()=>show(active==='lio'?'gps':'lio');
+ $('pickGoal').onclick=()=>{const cancel=active==='gps'&&mode==='goal';if(active!=='gps')show('gps');setMode(cancel?'pan':'goal');notify(cancel?'已取消选点':'放大后点击目标；拖动仍可平移地图')};
+ $('pickHeading').onclick=()=>{show('gps');setMode('heading');notify('从机头位置向前拖拽，设置初始方向预览（不是位置初始化）')};
+ $('saveHeading').onclick=async()=>{const raw=$('headingValue').value,v=Number(raw);if(!raw.trim()||!Number.isFinite(v)||v<0||v>=360){notify('方向请输入0到小于360的角度','error');return}if(await submit('heading',{heading_deg:v})){heading=v;$('headingSummary').textContent=`方向预览 ${v.toFixed(1)}°`}};
+ $('zoomIn').onclick=()=>{cameras[active].zoom(1.4);draw()};$('zoomOut').onclick=()=>{cameras[active].zoom(1/1.4);draw()};
+ $('mapHome').onclick=()=>{show('gps');if(bounds){cameras.gps.fit(bounds);draw()}else notify('地图尚未加载','error')};
+ $('gpsHome').onclick=()=>{show('gps');if(!online){notify('网关未连接，无法定位GPS','error');return}if(!gps){notify('尚未收到GPS数据，请检查驱动和桥接','error');return}if(age(gps)>=2){notify('GPS数据已过期，无法定位','error');return}if(!goodGps()){notify('当前无GPS信号，尚未获得有效经纬度','error');return}
+  const p=project(gps.value.longitude,gps.value.latitude);cameras.gps.x=p[0];cameras.gps.y=p[1];cameras.gps.scale=Math.max(cameras.gps.scale,1.5);draw();notify('定位成功：已居中显示原始GPS位置（非融合定位）')};
+ $('lioHome').onclick=()=>{show('lio');follow=true;draw();notify(goodLio()?'已跟随LIO相对位置':'LIO暂无新鲜数据，等待输入',goodLio()?'info':'error')};
+ window.NavMaps={show,draw,update(response,connected){online=connected;gps=response?.samples?.gps||null;lio=response?.samples?.lio||null;receivedAt=performance.now();
+   if(goodLio()&&lio.value.stamp!==lastStamp){if(lastStamp!==null&&lio.value.stamp<lastStamp){trajectory=[];follow=true;notify('LIO时间轴重置，已清除旧显示轨迹')}lastStamp=lio.value.stamp;trajectory.push(lio.value.position.slice(0,2));if(trajectory.length>2000)trajectory.shift()}draw()}};
+ new ResizeObserver(draw).observe($('workspace'));new ResizeObserver(draw).observe($('gpsView'));new ResizeObserver(draw).observe($('lioView'));
+ fetch('/api/osm').then(r=>{if(!r.ok)throw Error(r.status);return r.json()}).then(data=>{features=data.features.map(f=>({road:!!f.properties.highway,points:f.geometry.coordinates.map(p=>project(...p))}));for(const f of features)for(const p of f.points){if(!bounds)bounds=[...p,...p];else{bounds[0]=Math.min(bounds[0],p[0]);bounds[1]=Math.min(bounds[1],p[1]);bounds[2]=Math.max(bounds[2],p[0]);bounds[3]=Math.max(bounds[3],p[1])}}draw()}).catch(e=>{loadError='地图加载失败：'+e.message;notify(loadError,'error');draw()});
+ setInterval(draw,500);
+})();

@@ -44,7 +44,7 @@ class WebTests(unittest.TestCase):
         return urlopen(Request(self.base+path,data=json.dumps(body).encode(),headers=headers),timeout=2)
 
     def test_assets(self):
-        for path in ('/','/map.js','/control.js'):
+        for path in ('/','/map.js','/control.js','/viewport.js','/dashboard.js','/dashboard.css'):
             with urlopen(self.base+path,timeout=2) as r:self.assertGreater(len(r.read()),100)
 
     def test_osm(self):

@@ -47,6 +47,8 @@ log/
 !/scripts/test_robot_wire.py
 !/scripts/test_navigation_control.py
 !/scripts/test_navigation_web.py
+!/scripts/test_web_viewport.js
+!/scripts/test_web_interactions.js
 !/docs/navigation_web.md
 !/docs/robot_control.md
 !/map/robot_control.example.json

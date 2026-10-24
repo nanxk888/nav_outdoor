@@ -135,9 +135,9 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == '/api/osm':
             body = osm_data
             mime = 'application/geo+json'
-        elif self.path in ('/map.js','/control.js'):
+        elif self.path in ('/map.js','/control.js','/viewport.js','/dashboard.js','/dashboard.css'):
             body = (ROOT / 'web' / self.path[1:]).read_bytes()
-            mime = 'text/javascript; charset=utf-8'
+            mime = 'text/css; charset=utf-8' if self.path.endswith('.css') else 'text/javascript; charset=utf-8'
         else:
             self.send_error(404)
             return

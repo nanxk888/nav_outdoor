@@ -1,34 +1,16 @@
-<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>D1H 导航监视</title>
-<style>body{background:#101923;color:#dbe9ee;font:16px system-ui;margin:24px}section{background:#1c2a36;padding:20px;border-radius:12px;margin:16px 0}canvas{background:#12212b;width:100%;max-width:850px}pre{white-space:pre-wrap}button{padding:10px}#connection{color:#ffce70}</style>
-<h1>D1H 室外导航工作台</h1><p id="connection">等待数据网关</p>
-<p>默认只读 · 授权控制需要实机部署与安全验收 · 未融合的数据不叠加到地理地图</p>
-<section><h2>OSM 地图与GPS</h2><p id="mapState">加载本地道路与建筑轮廓</p>
-<button id="mapHome">地图全貌</button> <button id="gpsHome">定位GPS</button>
-<p>滚轮缩放 · 北朝上 · 绿色点：原始GPS天线位置</p>
-<canvas id="osm" width="850" height="480"></canvas>
-<p><button id="pickGoal">点选任务目标</button> <button id="pickHeading">拖拽初始方向</button></p>
-<p>初始方向（北0°，东90°）：<input id="headingValue" type="number" min="0" max="359.99" step="0.1" value="0"> <button id="saveHeading">保存方向预览</button></p>
-<p id="operatorResult">设置仅保存在后端内存；不会启动导航，也不会修改融合定位。重启后清除。</p>
-<p>© OpenStreetMap contributors · ODbL · 本地 xd_map.osm；非卫星影像，未审核道路通行性。</p>
-<pre id="gps">等待数据</pre><pre id="gps_status"></pre></section>
-<section><h2>LIO 相对位置（不是地理位置）</h2><pre id="lio"></pre><pre id="lio_status"></pre>
-<canvas id="plot" width="850" height="420"></canvas></section>
-<section><h2>机器人控制（默认未授权）</h2><p>启动将请求站立并进入loco。导航需融合与安全监督通过。停止是软件零速度请求，不代替硬件急停。</p>
-<input id="controlToken" type="password" autocomplete="off" placeholder="本次部署控制令牌，不保存">
-<button id="robotStart">启动：站立 → loco零速度</button>
-<button id="robotNavigate">确认目标并开始导航</button>
-<button id="robotStop">停止／取消任务</button>
-<pre id="controlState">等待状态</pre><p id="controlResult"></p></section>
-<script src="/map.js"></script><script src="/control.js"></script><script>
-const el=id=>document.getElementById(id), c=el('plot'),ctx=c.getContext('2d');
-let trajectory=[],lastStamp=null;
-async function poll(){try{const r=await fetch('/api/state',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error(r.status);const response=await r.json();const s=response.samples;window.updateControl(response.control);
-el('connection').textContent='网关已连接；数据接收年龄超过2秒标为过期（不代表测量延迟）';
-for(const key of ['gps','gps_status','lio','lio_status']){const x=s[key];el(key).textContent=x?`${x.receive_age_sec>2?'【过期】':''} 接收年龄 ${x.receive_age_sec.toFixed(2)} 秒\n${JSON.stringify(x.value,null,2)}`:'尚未收到该话题';}
-const l=s.lio;if(l&&l.receive_age_sec<2&&l.value.stamp!==lastStamp){if(lastStamp!==null&&l.value.stamp<lastStamp)trajectory=[];lastStamp=l.value.stamp;trajectory.push(l.value.position);if(trajectory.length>2000)trajectory.shift();}
-window.updateGpsMap(s.gps);
-ctx.clearRect(0,0,c.width,c.height);ctx.strokeStyle='#294451';for(let x=25;x<850;x+=50){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,420);ctx.stroke()}for(let y=10;y<420;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(850,y);ctx.stroke()}
-ctx.fillStyle='#ccc';ctx.fillText('LIO XY：每格1米；最多保留2000个显示样本；中心为最近位置',15,20);
-if(trajectory.length){const p=trajectory.at(-1);ctx.strokeStyle='#45d9d0';ctx.beginPath();trajectory.forEach((v,i)=>{let x=425+(v[0]-p[0])*50,y=210-(v[1]-p[1])*50;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();ctx.fillStyle='#70ee65';ctx.beginPath();ctx.arc(425,210,6,0,7);ctx.fill()}
-}catch(e){window.updateGpsMap(null,false);window.updateControl(null);el('connection').textContent='连接中断：'+e.message+'；显示数据不可视为实时状态'}finally{setTimeout(poll,500)}}poll();
-</script></html>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>D1H 导航工作台</title><link rel="stylesheet" href="/dashboard.css"></head><body>
+<header class="topbar"><div class="brand"><span class="brand-icon">D1</span><div><strong>导航工作台</strong><small>OUTDOOR / LOCAL OBSERVER</small></div></div><div class="status-strip"><span id="connection" class="status-pill">连接中</span><span id="gpsBadge" class="status-pill">GPS 等待数据</span><span id="lioBadge" class="status-pill">LIO 等待数据</span></div><button id="parameters" aria-controls="drawer" aria-expanded="false">参数与状态 ☰</button></header>
+<main id="workspace">
+ <section id="lioView" class="map-view is-main" aria-label="LIO相对导航视图"><canvas id="plot" aria-label="LIO相对轨迹，可拖动缩放"></canvas><div class="view-heading"><span class="eyebrow">LOCAL VIEW</span><h1>LIO 相对视图</h1><p>相对轨迹 · 非点云地图 · 尚未地理融合</p></div><button class="expand-view" data-view="lio">LIO 相对视图 ↗</button></section>
+ <section id="gpsView" class="map-view is-mini" aria-label="GPS全局地图"><canvas id="osm" aria-label="OSM地图，可拖动缩放、点选目标"></canvas><div class="view-heading"><span class="eyebrow">GLOBAL VIEW</span><h1>GPS / OSM</h1><p id="mapState">正在加载本地地图</p></div><button class="expand-view" data-view="gps">GPS 全局地图 ↗</button><span class="attribution">© OpenStreetMap contributors · ODbL</span></section>
+ <div class="map-tools"><button id="swapView">切换全局地图</button><button id="zoomIn" aria-label="放大">＋</button><button id="zoomOut" aria-label="缩小">－</button><button id="mapHome">地图全貌</button><button id="gpsHome">定位 GPS</button><button id="lioHome">跟随 LIO</button><button id="fullscreen">全屏 ⛶</button></div>
+ <div class="compass"><span>Ｎ</span>↑</div>
+ <div class="task-card"><span class="eyebrow">MISSION / PREVIEW</span><div class="task-title"><strong id="targetSummary">尚未选择目标</strong><span id="headingSummary">航向未设置</span></div><div class="task-actions"><button id="pickGoal" class="primary">＋ 选择目标</button><button id="pickHeading">设置初始方向</button><button id="robotNavigate" disabled>开始导航</button></div><p id="operatorResult">点选仅保存预览，不会自动运动。全局定位与LIO尚未融合。</p></div>
+ <div id="toast" role="status" aria-live="polite" hidden></div>
+ <footer class="bottom-status"><span id="viewHint">滚轮缩放 · 拖动平移 · 点击右上角切换视图</span><span id="scaleLabel"></span><span id="controlBrief">控制未授权</span></footer>
+</main>
+<aside id="drawer" class="drawer" hidden aria-label="参数与状态"><div class="drawer-title"><h2>参数与状态</h2><button id="closeDrawer" aria-label="关闭参数">✕</button></div>
+ <section><h3>初始方向</h3><p>北0°，东90°。当前仅保存预览，不修改融合定位。</p><div class="input-row"><input id="headingValue" type="number" min="0" max="359.99" step="0.1" placeholder="0—359.9"><button id="saveHeading">保存预览</button></div></section>
+ <section><h3>机器人控制</h3><p>默认禁用。启动涉及站立/loco；软件停止不代替硬件急停。</p><input id="controlToken" type="password" autocomplete="off" placeholder="本次控制令牌，不保存"><button id="robotStart" disabled>启动：站立 → loco零速度</button><button id="robotStop" class="danger">停止 / 取消任务</button><p id="controlResult"></p></section>
+ <section><h3>数据明细</h3><p>接收年龄不等于测量延迟。展开查看原始参数。</p><details><summary>GPS 定位与质量</summary><pre id="gps"></pre><pre id="gps_status"></pre></details><details><summary>LIO 位姿与状态</summary><pre id="lio"></pre><pre id="lio_status"></pre></details><details><summary>控制链状态</summary><pre id="controlState"></pre></details></section><p class="notice">本地OSM不代表通行许可。点云叠加、融合初始化尚未接入。</p>
+</aside><script src="/viewport.js"></script><script src="/map.js"></script><script src="/control.js"></script><script src="/dashboard.js"></script></body></html>

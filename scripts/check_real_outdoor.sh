@@ -8,6 +8,12 @@ export ROS_DOMAIN_ID=94
 python3 scripts/test_robot_wire.py
 python3 scripts/test_navigation_control.py
 python3 scripts/test_navigation_web.py
+if command -v node >/dev/null 2>&1; then
+  node scripts/test_web_viewport.js
+  node scripts/test_web_interactions.js
+else
+  echo 'SKIP: frontend JavaScript unit tests require Node.js (web serving does not).'
+fi
 python3 scripts/test_gnss_driver_guard.py
 python3 scripts/test_gnss_quality.py
 python3 scripts/test_osm_roads.py

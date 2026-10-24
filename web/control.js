@@ -8,6 +8,8 @@ for(const [id,kind] of [['robotStart','start'],['robotNavigate','navigate'],['ro
  try{const r=await command(kind);heartbeatEnabled=kind!=='stop';field('controlResult').textContent='请求已排队，不代表执行成功：'+JSON.stringify(r)}catch(e){field('controlResult').textContent='请求失败或结果未知：'+e.message}};
 }
 window.updateControl=s=>{field('controlState').textContent=s?JSON.stringify(s,null,2):'网关断开，机器人停止状态未知，请确认硬件安全';
+ const phases={DISABLED:'控制未授权',IDLE:'控制待机',STANDING:'请求站立中',ARMING:'连接接收器',ENTERING_LOCO:'进入loco',READY:'loco零速度待命',GOAL_PENDING:'等待导航确认',NAVIGATING:'导航任务中',STOPPED:'任务已停止'};
+ field('controlBrief').textContent=s?(phases[s.phase]||s.phase):'控制状态未知';
  field('robotStart').disabled=!s?.enabled||!['IDLE','STOPPED'].includes(s.phase);
  field('robotNavigate').disabled=!s?.enabled||s.phase!=='READY'||!s.navigation_safe;
  if(s&&['IDLE','STOPPED','DISABLED'].includes(s.phase))heartbeatEnabled=false;};
