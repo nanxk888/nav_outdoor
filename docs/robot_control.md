@@ -2,6 +2,8 @@
 
 当前是待实机验收的接入代码，不是已完成安全认证的控制系统。默认不授权运动，不自动打开 SDK 模式，不自动起立。测试时须有人现场看护，确认急停有效、场地净空和厂家规定的支撑条件。
 
+兼容ROS 2 Humble：通过标准 `rcl_interfaces/srv/GetParameters` 服务读取 SDK 开关，不依赖厂家环境可能未提供的 `rclpy.parameter_client` 模块。不需要为接收器升级机器人ROS安装。
+
 ## 接口与数据链路
 
 Orin（192.168.19.91）产生指令 → UDP 10099 → D1（192.168.19.90）接收器 → 本机 `/d13007925/command/user_command`，类型 `ddt_msgs/msg/UserCommand`。接收器读取实际 FSM、SDK 开关和双轮足构型。SSH 只用于部署文件，不承担运行时运动指令传输。

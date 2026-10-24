@@ -5,7 +5,7 @@ import socket
 import time
 from pathlib import Path
 import rclpy
-from rclpy.parameter_client import AsyncParameterClient
+from rcl_interfaces.srv import GetParameters
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from ddt_msgs.msg import UserCommand
@@ -31,12 +31,13 @@ def main():
     policy=ReceiverPolicy(args.authorize_motion,args.allow_pose,args.allow_height)
     pub=node.create_publisher(UserCommand,f'/{ns}/command/user_command',1)
     sub=node.create_subscription(String,f'/{ns}/rl_controller/fsm',lambda m:policy.feedback(m.data,time.monotonic()),10)
-    params=AsyncParameterClient(node,f'/{ns}/teleop_command')
+    params=node.create_client(GetParameters,f'/{ns}/teleop_command/get_parameters')
     controller=node.create_client(Trigger,f'/{ns}/command/get_controller_status')
     checks={'sdk':(False,-100.),'biped':(False,-100.)};pending={}
     def query():
         if params.service_is_ready() and ('sdk' not in pending or pending['sdk'].done()):
-            f=params.get_parameters(['use_sdk']);pending['sdk']=f
+            request=GetParameters.Request();request.names=['use_sdk']
+            f=params.call_async(request);pending['sdk']=f
             def sdk_done(future):
                 try:
                     value=future.result().values[0];checks['sdk']=(value.type==1 and value.bool_value,time.monotonic())
