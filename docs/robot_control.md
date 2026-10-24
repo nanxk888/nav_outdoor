@@ -140,7 +140,7 @@ cp map/robot_control.example.json /root/.config/nxk/control.json
 chmod 600 /root/.config/nxk/control.json
 ```
 
-人工审核填写 key_file、实际IP后，只有已完成现场验收才将 hardware_authorized、interfaces_verified 设为 true。`stand_ready_states` 必须填写厂家确认的“起立完成”反馈，不能把瞬态 transform_up 猜作完成。默认空列表时，网页不会从idle自动起立；可通过前述CLI确认进入loco后，再点击启动接管零速度待命。
+人工审核填写 key_file、实际IP后，只有已完成现场验收才将 hardware_authorized、interfaces_verified 设为 true。`stand_ready_states` 只填写厂家确认的完成反馈；现场目前只观察到 transform_up 状态，未确认有独立完成通知，不能把它当作站稳证明。按操作员要求新增 `stand_loco_delay_sec`，默认4秒（可配4–8秒）。没有已确认的完成状态时，网页在本次起立请求获得对应操作ID的新transform_up反馈、且发送已满4秒后请求loco；反馈缺失、在线检查或浏览器心跳失败均不继续。最终必须收到实际loco反馈才进入READY。定时切换须现场看护，不等同于自动检测站稳。
 
 survey_confirmed 在仅测试站立/姿态时可保留 false；导航仍会被阻止。地图原点、GPS/LIO融合与安全监督验收后才能开启导航相关配置。
 
@@ -152,7 +152,9 @@ export NXK_WEB_TOKEN="$(openssl rand -hex 32)"
 bash scripts/launch_real_workspace.sh control_config:=/root/.config/nxk/control.json
 ```
 
-不传 control_config 时仍是默认只读。网页启动流程：握手 → 起立完成反馈 → loco实际反馈 → READY零速度待命。已在loco则直接接管待命。READY时可设置姿态或确认落下。导航任务中不允许姿态/落下：先停止导航，再启动接管loco待命、显式回正并确认停稳。网页排队成功不代表物理动作成功。
+不传 control_config 时仍是默认只读。网页启动流程：握手 → transform_up → 完成反馈或上述4秒定时条件 → loco实际反馈 → READY零速度待命。已在loco则直接接管待命。READY时可设置姿态或确认落下。导航任务中不允许姿态/落下：先停止导航，再启动接管loco待命、显式回正并确认停稳。网页排队成功不代表物理动作成功。
+
+FSM每次事件变化有0.3秒历史整理窗口；Python在不超过0.5秒、过滤器在线且源时间戳有效时保持会话，但FSM为空并禁止非零速度。超过窗口仍无有效状态即撤销。这修复了落下后进入idle时整理窗口被误判为失联、导致nonce轮换的可能原因；具体实机报错仍需更新后复测，不视为已完成落下协议验收。
 
 ## 尚未完成的导航与安全前提
 

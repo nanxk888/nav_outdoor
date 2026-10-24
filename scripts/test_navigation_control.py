@@ -48,6 +48,19 @@ class ControlTests(unittest.TestCase):
         c=self.instance();c.tick()
         self.assertEqual(c.sent[-1],(('drive',),{'v':0.,'w':0.}))
 
+    def test_stand_four_second_fallback_requires_ack(self):
+        c=self.instance('STANDING');c.config={'stand_ready_states':[],'stand_loco_delay_sec':4.}
+        c.operation='up';c.stand_sent_at=time.monotonic()-3.9
+        c.robot.update(fsm='transform_up',fsm_valid=True,operation='up',last_mode='transform_up')
+        c.tick();self.assertEqual(c.phase,'STANDING')
+        c.stand_sent_at=time.monotonic()-4.1;c.tick();self.assertEqual(c.phase,'ENTERING_LOCO')
+
+    def test_stand_timer_does_not_use_old_operation(self):
+        c=self.instance('STANDING');c.config={'stand_ready_states':[]};c.operation='new'
+        c.stand_sent_at=time.monotonic()-5
+        c.robot.update(fsm='transform_up',fsm_valid=True,operation='old',last_mode='transform_up')
+        c.tick();self.assertEqual(c.phase,'STANDING')
+
     def test_browser_timeout(self):
         c=self.instance();c.browser-=3;c.tick()
         self.assertEqual(c.phase,'STOPPED');self.assertEqual(c.sent[0][0],('stop',))

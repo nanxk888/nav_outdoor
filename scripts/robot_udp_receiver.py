@@ -85,6 +85,10 @@ def main():
         online=unique and now-bridge_time<.3 and bridge.get('controllers_online') is True
         valid=online and bridge.get('valid') is True and bridge.get('source_timestamp_ns',0)>required_event_ns
         if valid:policy.feedback(bridge['state'],now)
+        elif online and bridge.get('source_timestamp_ns',0)>required_event_ns and type(bridge.get('event_age_sec')) in (int,float) and 0<=bridge['event_age_sec']<.5:
+            # A bounded settling interval also applies to transform_down -> idle.
+            # Keep the session, but expose no confirmed FSM and allow no motion.
+            policy.fsm='';policy.fsm_time=now
         elif online and required_event_ns and now<event_deadline:
             # Await an event without claiming a mode completion or allowing drive.
             policy.fsm='';policy.fsm_time=now

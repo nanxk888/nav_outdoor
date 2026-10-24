@@ -73,6 +73,7 @@ class Control:
         return {'queued': True, 'executed': False, 'kind': kind}
 
     def transition(self, phase, reason):
+        if phase=='STANDING':self.stand_sent_at=None
         self.phase = phase; self.reason = reason; self.state_since = time.monotonic()
         self.operation = secrets.token_hex(8)
 
@@ -157,8 +158,9 @@ class Control:
                         if self.phase not in ('IDLE','STOPPED'): raise ValueError('Already active')
                         if now-self.robot_time>.3 or not all(self.robot.get(k) for k in ('authorized','fsm_fresh','sdk_enabled','biped','interfaces_fresh')):
                             raise ValueError('Robot receiver/FSM not ready')
-                        if self.robot.get('fsm')!='loco' and not self.config.get('stand_ready_states'):
-                            raise ValueError('Confirm standing-complete FSM states first, or use manual commissioning sender')
+                        delay=self.config.get('stand_loco_delay_sec',4.)
+                        if type(delay) not in (int,float) or not math.isfinite(delay) or not 4<=delay<=8:
+                            raise ValueError('stand_loco_delay_sec must be 4..8 seconds')
                         self.browser = now; self.cmd_time = 0.
                         self.pose = None
                         self.session = secrets.token_hex(16)
@@ -185,8 +187,13 @@ class Control:
                     if self.robot.get('fsm')=='loco':self.transition('READY','Attached to existing loco at zero speed')
                     else:self.transition('STANDING','Request transform_up')
             elif self.phase == 'STANDING':
+                if not getattr(self,'stand_sent_at',None):self.stand_sent_at=now
                 self.send('drive','transform_up')
-                if now-self.state_since>.2 and self.robot.get('fsm') in self.config['stand_ready_states']:
+                acknowledged=(self.robot.get('operation')==self.operation and self.robot.get('last_mode')=='transform_up' and self.robot.get('fsm_valid') is True)
+                completed=acknowledged and self.robot.get('fsm') in self.config.get('stand_ready_states',[])
+                timed=acknowledged and self.robot.get('fsm')=='transform_up' and now-self.stand_sent_at>=self.config.get('stand_loco_delay_sec',4.)
+                if completed or timed:
+                    self.stand_sent_at=None
                     self.transition('ENTERING_LOCO','Request loco')
             elif self.phase == 'ENTERING_LOCO':
                 self.send('drive','loco')
