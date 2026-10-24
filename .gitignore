@@ -48,6 +48,7 @@ log/
 !/scripts/test_robot_policy.py
 !/scripts/test_robot_udp_pair.py
 !/scripts/test_fsm_bridge_ros.py
+!/scripts/test_web_control.js
 !/scripts/robot_udp_receiver.py
 !/scripts/test_robot_wire.py
 !/scripts/test_navigation_control.py
