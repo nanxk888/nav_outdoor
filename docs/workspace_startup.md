@@ -40,4 +40,8 @@ failures must still be observed through existing status channels and error logs.
 The observer exits after its startup audit; this is not a continuous safety monitor.
 
 Do not run a separate Nav2 launch alongside the unified one. An owned main process
-exiting shuts down the workspace; stopping the workspace is not a hardware emergency stop.
+exiting emits a `[PROCESS EXIT]` error with name and exit code, but does not stop other
+modules or restart the failed one. Ctrl+C still stops all processes owned by this launch.
+Motion safety/watchdog checks remain in effect: keeping visualization alive does not
+allow navigation with failed localization or perception. Configuration errors before
+process spawning still prevent startup. Stopping the workspace is not a hardware emergency stop.

@@ -14,7 +14,7 @@ GPS按钮明确提示：未收到数据、无有效信号、数据过期、网�
 
 新增 `d1h_nav2/launch/real_workspace.launch.py`，默认一次启动GPS驱动检查器、LIO、96→0 GPS桥接、GPS门控和网页，均无自动运动授权。不启动未验收导航、融合或D1接收器；Livox硬件驱动仍由外部启动。
 
-GPS检查器在当前Linux进程可见范围内查找精确脚本名gnss_receiver.py，不会把real_gnss_gate误判为驱动。已有驱动就复用、不终止；没有时读取原项目gnss.yaml的port，USB路径可见后通过原system_exec.sh在Domain96启动原驱动。USB未插好时只报一次缺失并等待，不阻止LIO/网页。自行启动的驱动异常退出不循环重启，而是报告错误并关闭整组。Ctrl+C只清理本检查器拥有的子进程组；旧驱动不受影响。旧驱动退出时会再次检查并尝试接管；不要与其他自动管理器竞争，也不要跨容器同时打开同一串口（PID命名空间可能互不可见）。
+GPS检查器在当前Linux进程可见范围内查找精确脚本名gnss_receiver.py，不会把real_gnss_gate误判为驱动。已有驱动就复用、不终止；没有时读取原项目gnss.yaml的port，USB路径可见后通过原system_exec.sh在Domain96启动原驱动。USB未插好时只报一次缺失并等待，不阻止LIO/网页。自行启动的驱动异常退出不循环重启，报告错误；统一启动不再因此关闭其他模块。Ctrl+C只清理本检查器拥有的子进程组；旧驱动不受影响。旧驱动退出时会再次检查并尝试接管；不要与其他自动管理器竞争，也不要跨容器同时打开同一串口（PID命名空间可能互不可见）。
 
 参数：with_gps_driver默认true，可设false关闭。gps_driver_root默认/workspace/d1h-autonomy-final，gps_driver_config默认该项目.local/robot/perception/gnss.yaml，可按现场路径覆盖。驱动和私有配置不复制进仓库。修正DDS环境变量为真正unset，避免空路径XMLPARSER错误。
 
@@ -32,7 +32,7 @@ source install/setup.bash
 bash scripts/launch_real_workspace.sh
 ```
 
-前置：Livox驱动已在Domain0发布雷达与IMU；domain_bridge、rmw_cyclonedds_cpp及原GPS驱动依赖已安装。GPS专用XML默认使用现场原项目路径，可用 `gps_cyclonedds_xml:=/absolute/file.xml` 覆盖。Ctrl+C停止本入口拥有的模块，不杀外部进程。任一直接子进程退出会关闭整组，不自动重启；LIO缺传感器会保护退出。不要同时运行旧同名模块或第二个网页（8765端口）。不执行sudo、pkill或网卡修改；仅缺少GPS驱动且设备可见时打开配置中的串口。
+前置：Livox驱动已在Domain0发布雷达与IMU；domain_bridge、rmw_cyclonedds_cpp及原GPS驱动依赖已安装。GPS专用XML默认使用现场原项目路径，可用 `gps_cyclonedds_xml:=/absolute/file.xml` 覆盖。Ctrl+C停止本入口拥有的模块，不杀外部进程。直接子进程退出只输出名称和退出码，不联动关闭其他模块、不自动重启；LIO缺传感器仍会保护退出，运动安全联锁仍保留。不要同时运行旧同名模块或第二个网页（8765端口）。不执行sudo、pkill或网卡修改；仅缺少GPS驱动且设备可见时打开配置中的串口。
 
 已有部分模块在其他终端运行时，可明确关闭本入口相应模块，例如 `bash scripts/launch_real_workspace.sh with_lio:=false`。支持 with_gps_bridge、with_gnss_gate、with_web。整组统一Domain0/CycloneDDS，使用gps_cyclonedds_xml指定的同一发现配置（GPS驱动仍Domain96）。默认不读取NXK控制环境配置，防止新开终端继承运动授权。
 

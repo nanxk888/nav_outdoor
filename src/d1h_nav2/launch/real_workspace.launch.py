@@ -5,13 +5,21 @@ from pathlib import Path
 from ament_index_python.packages import get_package_share_directory, get_package_prefix
 from launch import LaunchDescription
 from launch.actions import (DeclareLaunchArgument, ExecuteProcess,
-                            OpaqueFunction, RegisterEventHandler, EmitEvent, SetEnvironmentVariable,
+                            OpaqueFunction, RegisterEventHandler, SetEnvironmentVariable,
                             UnsetEnvironmentVariable)
 from launch.event_handlers import OnProcessExit, OnProcessStart
 from launch.actions import LogInfo
-from launch.events import Shutdown
+from launch.logging import get_logger
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+
+
+def report_process_exit(event, context):
+    if context.is_shutdown:
+        return []
+    get_logger('workspace').error('[PROCESS EXIT] '+event.process_name+' exited with code '+str(event.returncode)
+                                +'; other workspace modules remain running; no automatic restart. Check this process logs.')
+    return []
 
 
 def configure(context):
@@ -84,13 +92,12 @@ def configure(context):
     if nav_enabled:
         critical.append(ExecuteProcess(cmd=['ros2','launch','d1h_nav2','real_osm_navigation.launch.py',
             'profile:='+str(profile)],output='screen',name='nav_navigation'))
-    # Register before spawning; fail the bringup if any owned top-level process exits.
+    # Isolate process exits; Ctrl+C still uses launch's normal global shutdown.
     def started(event, _context):
         return [LogInfo(msg='[STARTED] '+event.process_name+' process started; data readiness checked separately')]
     for process in critical:
         actions.append(RegisterEventHandler(OnProcessStart(target_action=process,on_start=started)))
-        actions.append(RegisterEventHandler(OnProcessExit(target_action=process,on_exit=[
-            EmitEvent(event=Shutdown(reason='A workspace process exited; no automatic restart'))])))
+        actions.append(RegisterEventHandler(OnProcessExit(target_action=process,on_exit=report_process_exit)))
     actions.extend(critical)
     checks=[]
     for flag,label in [('with_lio','lio'),('with_gps_bridge','gps'),('with_gnss_gate','gate'),
