@@ -1,5 +1,32 @@
 # Orin unified startup
 
+## Stop / duplicate launches / LIO diagnostics
+
+```bash
+cd /workspace/nxk
+bash scripts/stop_real_workspace.sh --dry-run  # inspect exact PID targets
+bash scripts/stop_real_workspace.sh            # SIGINT, then bounded TERM/KILL fallback
+```
+
+This targets the current checkout's unified launch, known module executables/scripts,
+GPS bridge configuration and their current descendants. It does not broadly pkill
+ROS/Python, stop the D1 receiver, or stop an externally owned Livox/GPS driver.
+An owned GPS child is stopped. Already-orphaned Nav2 executables installed outside
+this checkout cannot always be attributed safely and are not killed by name.
+Run with the same OS user as bringup. No files are deleted. Stop cancels running
+software control; it is not a hardware emergency stop. Keep physical supervision.
+
+The normal unified entry holds `.local/real_workspace.lock` to reject duplicate
+invocations for this checkout. Direct `ros2 launch` or standalone LIO launches bypass
+that shell lock: do not mix those entry points. A lock file remaining on disk is
+normal and is not evidence of a held lock; do not delete it to bypass a live process.
+
+LIO validation errors now include source/previous timestamps, sample age, allowed
+age, queue sizes and individual flags (1 means triggered). Output validation also
+reports `gravity_not_aligned` and `invalid_covariance`. This is error-only detail,
+not per-frame logging. Existing validity thresholds and fail-stop behavior are unchanged.
+Rebuild C++ on Orin before relying on the new error messages.
+
 From `/workspace/nxk`, after sourcing ROS, Livox and verified dependency underlays:
 
 ```bash

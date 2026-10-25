@@ -41,6 +41,9 @@ log/
 !/scripts/launch_real_workspace.sh
 !/scripts/workspace_startup_check.py
 !/scripts/test_workspace_exit.py
+!/scripts/stop_real_workspace.py
+!/scripts/stop_real_workspace.sh
+!/scripts/test_workspace_stop.py
 !/scripts/ensure_real_gnss_driver.py
 !/scripts/test_gnss_driver_guard.py
 !/scripts/navigation_control.py

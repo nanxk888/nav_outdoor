@@ -8,6 +8,7 @@ export ROS_DOMAIN_ID=94
 python3 scripts/test_robot_wire.py
 python3 scripts/test_robot_policy.py
 python3 scripts/test_d1_launcher.py
+python3 scripts/test_workspace_stop.py
 python3 scripts/test_robot_udp_pair.py
 if ros2 pkg prefix d1h_robot_bridge >/dev/null 2>&1; then
   python3 scripts/test_fsm_bridge_ros.py

@@ -13,6 +13,8 @@ which is included as part of this source code package.
 #include "LIVMapper.h"
 #include "navigation_odometry.h"
 #include <vikit/camera_loader.h>
+#include <sstream>
+#include <iomanip>
 
 using namespace Sophus;
 LIVMapper::LIVMapper(rclcpp::Node::SharedPtr &node, std::string node_name)
@@ -925,7 +927,19 @@ void LIVMapper::livox_pcl_cbk(const livox_custom_msg::CustomMsg::ConstSharedPtr 
       (navigation_seen_cloud && input_time <= last_timestamp_lidar) ||
       input_age < -0.05 || input_age > navigation_max_age || msg_in->point_num > 100000 ||
       msg_in->point_num != msg_in->points.size() || lid_raw_data_buffer.size() >= 4)
-    throw std::runtime_error("Invalid/stale LiDAR sample or input queue overflow");
+  {
+    std::ostringstream error;
+    error << std::setprecision(16) << "LiDAR validation failed: stamp=" << input_time
+          << " previous=" << last_timestamp_lidar << " age_sec=" << input_age
+          << " max_age_sec=" << navigation_max_age << " queue=" << lid_raw_data_buffer.size()
+          << "/4 point_num=" << msg_in->point_num << " points_size=" << msg_in->points.size()
+          << " flags[bad_stamp=" << (!std::isfinite(input_time) || input_time <= 0)
+          << " nonincreasing=" << (navigation_seen_cloud && input_time <= last_timestamp_lidar)
+          << " future=" << (input_age < -.05) << " stale=" << (input_age > navigation_max_age)
+          << " invalid_count=" << (msg_in->point_num > 100000 || msg_in->point_num != msg_in->points.size())
+          << " queue_full=" << (lid_raw_data_buffer.size() >= 4) << "]";
+    throw std::runtime_error(error.str());
+  }
   navigation_seen_cloud = true; navigation_cloud_rx = std::chrono::steady_clock::now();
   if (!lidar_en) return;
   mtx_buffer.lock();
@@ -1004,7 +1018,20 @@ void LIVMapper::imu_cbk(const sensor_msgs::msg::Imu::ConstSharedPtr &msg_in)
       input_time <= 0 || (navigation_seen_imu && last_timestamp_imu > 0 && input_time <= last_timestamp_imu) ||
       (navigation_seen_imu && last_timestamp_imu > 0 && input_time-last_timestamp_imu > .05) ||
       input_age < -.05 || input_age > navigation_max_age || imu_buffer.size() >= 400)
-    throw std::runtime_error("Invalid/stale/gapped IMU sample or input queue overflow");
+  {
+    std::ostringstream error;
+    error << std::setprecision(16) << "IMU validation failed: stamp=" << input_time
+          << " previous=" << last_timestamp_imu << " step_sec=" << input_time-last_timestamp_imu
+          << " age_sec=" << input_age << " max_age_sec=" << navigation_max_age
+          << " queue=" << imu_buffer.size() << "/400"
+          << " flags[bad_vector=" << (!input_acc.allFinite() || !input_gyro.allFinite())
+          << " bad_stamp=" << (!std::isfinite(input_time) || input_time <= 0)
+          << " nonincreasing=" << (navigation_seen_imu && last_timestamp_imu > 0 && input_time <= last_timestamp_imu)
+          << " gap=" << (navigation_seen_imu && last_timestamp_imu > 0 && input_time-last_timestamp_imu > .05)
+          << " future=" << (input_age < -.05) << " stale=" << (input_age > navigation_max_age)
+          << " queue_full=" << (imu_buffer.size() >= 400) << "]";
+    throw std::runtime_error(error.str());
+  }
   navigation_seen_imu = true; navigation_imu_rx = std::chrono::steady_clock::now();
   if (!imu_en) return;
 
@@ -1586,7 +1613,19 @@ void LIVMapper::publish_odometry(const rclcpp::Publisher<nav_msgs::msg::Odometry
   const double age = this->node->now().seconds() - stamp;
   if (!std::isfinite(stamp) || stamp <= navigation_output_time || age < -0.05 ||
       age > navigation_max_age || !gravity_align_finished || !_state.cov.allFinite())
-    throw std::runtime_error("Invalid/stale/nonincreasing LIO state time or covariance");
+  {
+    std::ostringstream error;
+    error << std::setprecision(16) << "LIO output validation failed: stamp=" << stamp
+          << " previous_output=" << navigation_output_time << " age_sec=" << age
+          << " max_age_sec=" << navigation_max_age << " lidar_queue=" << lid_raw_data_buffer.size()
+          << " imu_queue=" << imu_buffer.size()
+          << " flags[bad_stamp=" << !std::isfinite(stamp)
+          << " nonincreasing=" << (stamp <= navigation_output_time)
+          << " future=" << (age < -.05) << " stale=" << (age > navigation_max_age)
+          << " gravity_not_aligned=" << !gravity_align_finished
+          << " invalid_covariance=" << !_state.cov.allFinite() << "]";
+    throw std::runtime_error(error.str());
+  }
   if (LidarMeasures.measures.empty() || LidarMeasures.measures.back().imu.empty())
     throw std::runtime_error("No measured angular velocity paired with scan");
   const auto &imu = *LidarMeasures.measures.back().imu.back();

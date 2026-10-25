@@ -2,6 +2,13 @@
 set -eo pipefail
 cd "$(dirname "$0")/.."
 WORKSPACE_DIR="$PWD"
+# Hold a checkout-local lock across exec to reject duplicate unified launches.
+mkdir -p .local
+exec 200>.local/real_workspace.lock
+if ! flock -n 200; then
+  echo 'Workspace already running. Stop it with bash scripts/stop_real_workspace.sh first.' >&2
+  exit 1
+fi
 source /opt/ros/humble/setup.bash
 if [ ! -r install/setup.bash ]; then
   echo 'Build the workspace first: bash scripts/build_real_outdoor.sh' >&2
