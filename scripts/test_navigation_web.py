@@ -107,6 +107,19 @@ class WebTests(unittest.TestCase):
             self.assertEqual(len(received),1)
         finally:self.m.memory_goal_pub=old_pub;self.m.String=old_string
 
+    def test_memory_reset_without_motion(self):
+        old_pub=self.m.memory_reset_pub;old_string=self.m.String;received=[]
+        self.m.memory_reset_pub=types.SimpleNamespace(publish=lambda m:received.append(json.loads(m.data)))
+        self.m.String=types.SimpleNamespace
+        try:
+            self.m.save('memory',json.dumps(dict(ready=False,frame='lio_odom',epoch='reset-test')))
+            with self.post('/api/operator/memory_reset',{}) as r:
+                reply=json.load(r);self.assertTrue(reply['queued']);self.assertFalse(reply['odometry_reset'])
+            self.assertEqual(received[0]['epoch'],'reset-test')
+            with self.assertRaises(HTTPError):self.post('/api/operator/memory_reset',{'reset_odometry':True})
+            self.assertEqual(len(received),1)
+        finally:self.m.memory_reset_pub=old_pub;self.m.String=old_string
+
     def test_no_origin(self):
         with self.assertRaises(HTTPError) as c:self.post('/api/operator/heading',{'heading_deg':0},False)
         self.assertEqual(c.exception.code,403)

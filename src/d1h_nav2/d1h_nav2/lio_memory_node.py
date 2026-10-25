@@ -22,7 +22,7 @@ def stamp(msg):return msg.header.stamp.sec*10**9+msg.header.stamp.nanosec
 class LioMemoryNode(Node):
     def __init__(self):
         super().__init__('lio_observed_memory')
-        for k,v in {'resolution_m':.25,'retention_sec':120.,'footprint_radius_m':.5}.items():self.declare_parameter(k,v)
+        for k,v in {'resolution_m':.25,'retention_sec':300.,'footprint_radius_m':.5}.items():self.declare_parameter(k,v)
         self.memory=ObservedMemory(self.get_parameter('resolution_m').value,self.get_parameter('retention_sec').value,
                                    radius=self.get_parameter('footprint_radius_m').value)
         self.bundles={};self.previous=None;self.frame='';self.last_scan=0;self.origin=(0.,0.);self.goal=None
@@ -35,7 +35,8 @@ class LioMemoryNode(Node):
             self.create_subscription(PointCloud2,'/livox/lidar/pointcloud_nav',lambda m:self.cache('nav',m),qos_profile_sensor_data),
             self.create_subscription(PointCloud2,'/livox/lidar/pointcloud_clear',lambda m:self.cache('clear',m),qos_profile_sensor_data),
             self.create_subscription(String,'/navigation/cloud_filter/status',self.on_ground,5),
-            self.create_subscription(String,'/navigation/memory/goal_candidate',self.on_goal,1)]
+            self.create_subscription(String,'/navigation/memory/goal_candidate',self.on_goal,1),
+            self.create_subscription(String,'/navigation/memory/reset',self.on_reset,1)]
         self.timer=self.create_timer(.5,self.tick)
 
     def cache(self,name,msg):
@@ -46,6 +47,9 @@ class LioMemoryNode(Node):
         self.memory.cells.clear();self.memory.time=None;self.goal=None;self.bundles.clear();self.last_scan=0
         self.scan_rx=-math.inf
         self.epoch=uuid.uuid4().hex;self.reason='LIO reset/gap: memory and goal cleared'
+        # Explicitly invalidate downstream cached candidates/grids immediately.
+        path=Path();path.header.frame_id=self.frame;self.path_pub.publish(path)
+        self.publish_grid()  # Unknown cells, zero source stamp: not new sensor evidence.
 
     def on_odom(self,msg):
         p=msg.pose.pose.position;now=time.monotonic()
@@ -54,6 +58,15 @@ class LioMemoryNode(Node):
             if dt<=0 or dt>1 or now-rx>1 or old.header.frame_id!=msg.header.frame_id or math.dist((p.x,p.y,p.z),(q.x,q.y,q.z))>.5+2*max(0,dt):self.reset()
         self.previous=(msg,now);self.frame=msg.header.frame_id
         self.cache('odom',msg)
+
+    def on_reset(self,msg):
+        try:
+            request=json.loads(msg.data)
+            if set(request)!={'epoch','request_time'} or request['epoch']!=self.epoch:raise ValueError('Reset epoch mismatch')
+            t=request['request_time']
+            if type(t) not in (int,float) or not math.isfinite(t) or not -.1<=time.time()-t<=3:raise ValueError('Reset request expired')
+            self.reset();self.reason='Operator cleared observation memory and goal; LIO odometry unchanged'
+        except (ValueError,TypeError,KeyError) as exc:self.reason='Reset rejected: '+str(exc)
 
     def on_ground(self,msg):
         try:self.ground=json.loads(msg.data);self.ground_rx=time.monotonic()

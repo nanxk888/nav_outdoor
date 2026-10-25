@@ -22,7 +22,7 @@ rclpy.init();memory=LioMemoryNode();fixture=rclpy.create_node('memory_test_fixtu
 pubs={name:fixture.create_publisher(typ,topic,10) for name,typ,topic in [
     ('odom',Odometry,'/navigation/lio/odometry'),('nav',PointCloud2,'/livox/lidar/pointcloud_nav'),
     ('clear',PointCloud2,'/livox/lidar/pointcloud_clear'),('ground',String,'/navigation/cloud_filter/status'),
-    ('goal',String,'/navigation/memory/goal_candidate')]}
+    ('goal',String,'/navigation/memory/goal_candidate'),('reset',String,'/navigation/memory/reset')]}
 records=[];sub=fixture.create_subscription(String,'/navigation/memory/status',lambda m:records.append(json.loads(m.data)),10)
 executor=SingleThreadedExecutor();executor.add_node(memory);executor.add_node(fixture)
 def step(seconds,inputs=True):
@@ -46,6 +46,12 @@ try:
     assert not records[-1]['base_link_ready']
     step(1.5,False);assert not records[-1]['ready'] and records[-1]['route'] is None
     old=records[-1]['epoch'];step(1.5);assert records[-1]['epoch']!=old and records[-1]['goal'] is None
+    assert records[-1]['retention_sec']==300.
+    old=memory.epoch;frame=memory.frame
+    pubs['reset'].publish(String(data=json.dumps(dict(epoch=old,request_time=time.time()))))
+    step(.7,False)
+    assert memory.epoch!=old and not memory.memory.cells and memory.goal is None
+    assert memory.frame==frame and records[-1]['ready'] is False
     for topic in ('/cmd_vel','/real_navigation/cmd_vel_candidate'):
         assert not any(p.node_name=='lio_observed_memory' for p in fixture.get_publishers_info_by_topic(topic))
     from nav_msgs.msg import OccupancyGrid
@@ -66,5 +72,6 @@ try:
     assert fake.access_segment is None and list(saved[-1].data).count(100)==6400
     print('PASS: real ROS matched clouds -> bounded memory -> candidate path; stale input hides route; reset clears goal; no velocity output')
     print('PASS: off-road access rejects obstacles/unknown and carves only a narrow verified corridor')
+    print('PASS: 300-second default; explicit memory reset clears cells/goal without resetting odometry')
 finally:
     executor.shutdown();memory.destroy_node();fixture.destroy_node();rclpy.shutdown()

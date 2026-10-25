@@ -33,7 +33,7 @@ class OsmRoadPlanner(Node):
                              profile['approved_way_ids'])
         self.lock=threading.Lock(); self.costmap=None; self.rx=-math.inf
         self.access_grid=None
-        self.offroad_limit=float(profile.get('offroad_start_limit_m',10.))
+        self.offroad_limit=float(profile.get('offroad_start_limit_m',20.))
         if not 0<=self.offroad_limit<=30:raise ValueError('offroad_start_limit_m must be 0..30')
         self.tf=Buffer();self.listener=TransformListener(self.tf,self)
         group=ReentrantCallbackGroup()

@@ -125,6 +125,7 @@
  $('followGeo').onclick=()=>{show('gps');geoFollow=true;draw();if(!geoReady())notify('请先完成有效的GPS＋LIO地理对齐','error')};
  $('pickLioGoal').onclick=()=>{show('lio');setMode('lio_goal');notify('点击LIO视图设置相对目标，仅生成记忆候选路径')};
  $('planGeoMemory').onclick=()=>{if(!geoReady()||!goal){notify('先完成地理对齐并选择OSM目标','error');return}memoryGoal(alignment.unpoint(project(...goal)))};
+ $('resetMemory').onclick=async()=>{try{const r=await fetch('/api/operator/memory_reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error(r.status);notify('已请求清空观察记忆和候选目标；LIO里程计不重启，后续扫描会重新积累')}catch(e){notify('重置记忆失败：'+e.message,'error')}};
  for(const id of ['headingValue'])$(id).addEventListener('input',()=>{if(alignment){alignment=null;draw();notify('方向已更改，请重新静止对齐')}});
  $('mapHome').onclick=()=>{geoFollow=false;show('gps');if(bounds){cameras.gps.fit(bounds);draw()}else notify('地图尚未加载','error')};
  $('gpsHome').onclick=()=>{geoFollow=false;show('gps');if(!online){notify('网关未连接，无法定位GPS','error');return}if(!gps){notify('尚未收到GPS数据，请检查驱动和桥接','error');return}if(age(gps)>=2){notify('GPS数据已过期，无法定位','error');return}if(!goodGps()){notify('当前无GPS信号，尚未获得有效经纬度','error');return}

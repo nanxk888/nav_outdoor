@@ -27,7 +27,8 @@ class MemoryTests(unittest.TestCase):
         self.assertNotIn((8,0),m.cells)
         m.observe((0,0),[],[],11);self.assertNotIn((0,10),m.cells)
     def test_expiry_and_clock_reset(self):
-        m=self.plane();m.expire(131);self.assertFalse(m.cells)
+        m=self.plane();m.expire(309);self.assertTrue(m.cells)
+        m.expire(311);self.assertFalse(m.cells)
         m=self.plane();m.expire(9);self.assertFalse(m.cells)
 
 

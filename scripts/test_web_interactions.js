@@ -59,6 +59,8 @@ async function click(x,y){$('osm').handlers.pointerdown(event(x,y));await $('osm
  $('pickLioGoal').onclick();$('plot').handlers.pointerdown(event(600,400));await $('plot').handlers.pointerup(event(600,400));
  assert.equal(posts.at(-1)[0],'/api/operator/lio_goal');assert.equal(posts.at(-1)[1].epoch,'memory-test');
  assert.equal(scan.gps.value.valid,false,'GPS-free local goal must work without valid GPS');
+ await $('resetMemory').onclick();assert.equal(posts.at(-1)[0],'/api/operator/memory_reset');
+ assert(messages.at(-1)[0].includes('里程计不重启'));
  assert(!posts.some(p=>p[0].startsWith('/api/control')),'map actions must never start motion');
  console.log('PASS: GPS success/no-fix/stale/disconnect feedback; target selection; drag suppression; heading validation; main/mini swap; no motion requests');
 })().catch(e=>{console.error(e);process.exitCode=1});

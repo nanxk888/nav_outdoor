@@ -17,7 +17,7 @@ from d1h_nav2.cloud_geometry import transform_xyz
 class ObstacleMemoryNode(Node):
     def __init__(self):
         super().__init__('obstacle_memory')
-        defaults = dict(remember_all_obstacles=True, stable_sec=0., retention_sec=120., resolution_m=.25,
+        defaults = dict(remember_all_obstacles=True, stable_sec=0., retention_sec=300., resolution_m=.25,
                         max_gap_sec=.6, motion_tolerance_m=.15, max_tracks=256,
                         max_cells=100000, max_range_m=5., max_scan_age_sec=.5)
         for name, value in defaults.items():

@@ -5,7 +5,7 @@ import time
 
 
 class ObservedMemory:
-    def __init__(self,resolution=.25,retention=120.,max_cells=60000,radius=.5):
+    def __init__(self,resolution=.25,retention=300.,max_cells=60000,radius=.5):
         if not .1<=resolution<=1 or not 1<=retention<=600 or not 100<=max_cells<=100000 or not .3<=radius<=1.5:
             raise ValueError('Invalid bounded memory parameters')
         self.resolution=resolution;self.retention=retention;self.max_cells=max_cells;self.radius=radius

@@ -12,7 +12,8 @@ guarded. This is not yet unattended explore-to-goal navigation or a qualified te
 ## Memory, in both display modes
 
 - Sparse 0.25 m grid: occupied=100, observed planar visibility=0, absent/expired=unknown.
-- Each observation earns its own 120 s TTL, at most 60,000 retained cells. No scan logs.
+- Each observation earns its own 300 s (5 min) TTL, refreshed by new observations,
+  at most 60,000 retained cells. No scan logs. Capacity limits may evict older cells sooner.
 - At most 2,000 deduplicated rays per processed scan; no ray beyond a current obstacle.
   No-return areas are NOT marked free. New positive obstacle evidence wins over clearing.
 - An 80 m rolling OccupancyGrid is emitted on `/navigation/memory/grid` in native LIO
@@ -59,7 +60,9 @@ The real OSM RoadGraph now supports a bounded start connector, keeping the TRUE 
 pose in the path, not snapping the reported robot position. The goal still must lie
 in an approved road corridor. Campus boundary, approved ways and directionality remain.
 
-The ROS road planner defaults `offroad_start_limit_m` to 10 m (0 disables, maximum 30).
+The ROS road planner defaults `offroad_start_limit_m` to 20 m (0 disables, maximum 30).
+An existing private profile with an explicit older value overrides this default; update
+that field to 20.0 yourself if appropriate. No private profile is overwritten automatically.
 It selects the nearest segment, and requires fresh memory evidence covering a 0.5 m
 footprint around the connector. Unknown, blocked, stale or missing TF rejects access;
 it does not assume that all non-road space is open. A blocked nearest connector currently
@@ -73,6 +76,23 @@ Actual road navigation still needs reviewed profile, valid `map -> odom -> base_
 and native-LIO-to-map transforms, local planner/controller, correct footprint and the
 existing safety status producer. Browser-only alignment is NOT this TF. This change
 does not complete those remaining dependencies or enable navigation automatically.
+
+## Reset and staged exploration are different from a full connector
+
+The web “reset LIO observation memory and candidate goal” button clears memory and
+the candidate goal, advances the memory epoch, and discards buffered old scans.
+It does NOT restart/reset the LIO estimator or change the LIO coordinate origin.
+It does not drive/stop the robot or clear separate legacy Nav2 costmaps/overlays.
+New scans immediately begin accumulating again.
+Actual LIO resets/gaps still automatically clear memory as before.
+
+A 20 m road-access allowance is NOT proof of a free 20 m connector. The road planner
+still requires evidence for the entire connector before releasing a complete road
+route. With only the first 5 m observed, the memory planner may provide a PARTIAL
+frontier candidate within that observed area (with footprint/edge margin), then
+replan as new scans arrive. Automatic driving between those frontiers and automatic
+handoff to road navigation remain unconnected. A 5 m sensor range does NOT imply
+every cell in that range is free or that terrain is traversable.
 
 ## Deploy and verify
 

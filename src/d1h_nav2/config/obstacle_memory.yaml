@@ -3,7 +3,7 @@ obstacle_memory:
     use_sim_time: true
     remember_all_obstacles: true
     stable_sec: 0.0
-    retention_sec: 120.0
+    retention_sec: 300.0
     resolution_m: 0.25
     max_gap_sec: 0.6
     motion_tolerance_m: 0.15
