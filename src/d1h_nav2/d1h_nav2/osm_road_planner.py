@@ -26,11 +26,9 @@ class OsmRoadPlanner(Node):
         self.declare_parameter('profile', '')
         with open(self.get_parameter('profile').value, encoding='utf-8') as f:
             profile=json.load(f)
-        if not profile.get('survey_confirmed'):
-            raise ValueError('Road survey / datum confirmation required before enabling real planning')
         self.roads=RoadGraph(profile['osm_file'],profile['datum_latitude_deg'],
-                             profile['datum_longitude_deg'],profile['minimum_road_width_m'],
-                             profile['approved_way_ids'])
+                             profile['datum_longitude_deg'],profile.get('road_width_m',profile.get('minimum_road_width_m') or 3.),
+                             profile.get('approved_way_ids'))
         self.lock=threading.Lock(); self.costmap=None; self.rx=-math.inf
         self.access_grid=None
         self.offroad_limit=float(profile.get('offroad_start_limit_m',20.))
@@ -51,7 +49,7 @@ class OsmRoadPlanner(Node):
         self.access_segment=None
         self.pub.publish(self.grid)
         self.access_timer=self.create_timer(.5,self.expire_access)
-        self.get_logger().info(f'Real OSM A*: {len(self.roads.edges)} approved segments; no actuator output')
+        self.get_logger().info(f'Real OSM A*: {len(self.roads.edges)} road segments; no actuator output')
 
     def make_grid(self):
         resolution=.5
@@ -62,7 +60,7 @@ class OsmRoadPlanner(Node):
         h=math.ceil((max(p[1] for p in points)+margin-ymin)/resolution)
         if w*h>20000000:raise ValueError('Approved road extent too large; split deployment region')
         data=np.full((h,w),100,dtype=np.int8)
-        # Width must be surveyed minimum clear width, not an inferred OSM width.
+        # Configurable geometric corridor, not a claim of measured traversable width.
         radius=self.roads.width/2
         for a,b,_ in self.roads.edges:
             ax,ay=self.roads.xy[a];bx,by=self.roads.xy[b]

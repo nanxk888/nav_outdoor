@@ -1,5 +1,23 @@
 # Observed-space memory and road access
 
+## Current policy: no manual road approval
+
+`survey_confirmed` is no longer checked. An absent/empty `approved_way_ids` now
+automatically selects supported ground-level OSM roads; a nonempty list is only an
+optional user route filter. Private/restricted/unsupported bridge/tunnel ways remain
+excluded because they are not represented by this planar graph. `road_width_m`
+(default 3 m) is a configurable geometric corridor, not a surveyed-width claim.
+The current example profile is usable after setting its real file path/datum/width;
+there is no approval checkbox to turn on. Old approval wording below is historical
+and does not impose a gate. Robot connection config likewise no longer requires
+`hardware_authorized`, `interfaces_verified` or `survey_confirmed` flags.
+
+This does NOT create missing localization/controller nodes. The current automatic
+control chain still requires a real producer for `/real_navigation/safety_status`,
+the actual body/map transforms and running Nav2. No such producer is implemented
+in this repository yet. Removing approvals must not be mistaken for completing
+that execution chain or for replacing missing measurements with `true`.
+
 ## What is implemented, and what is NOT
 
 The unified Orin launch now enables `lio_memory` (`with_memory:=false` disables it).

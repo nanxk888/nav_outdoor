@@ -1,5 +1,11 @@
 # Orin unified startup
 
+Current policy: no road approval fields or mandatory approved-way list are required.
+`survey_confirmed` is ignored; configure the actual OSM file, datum and corridor width.
+See [observed_navigation.md](observed_navigation.md) for remaining execution-chain
+dependencies. Older references below to a "reviewed profile" describe geometry setup,
+not a required approval flag.
+
 ## Stop / duplicate launches / LIO diagnostics
 
 ```bash
@@ -51,14 +57,14 @@ bash scripts/launch_real_workspace.sh \
   sensor_height_m:=0.46 \
   control_config:=/root/.config/nxk/control.json \
   with_nav:=true \
-  nav_profile:=/root/.config/nxk/reviewed_osm_profile.json
+  nav_profile:=/root/.config/nxk/osm_profile.json
 ```
 
-Use an actually reviewed profile with surveyed datum, width, approved way IDs and an
-existing absolute Orin OSM path. The repository example deliberately fails validation.
-No profile is generated or marked approved automatically. Nav2 remains opt-in until
-localization, body extrinsics, TF and safety inputs have been integrated and verified.
-This launch does not implement these missing prerequisites or authorize movement.
+Configure an existing absolute Orin OSM path, numeric datum and road corridor width.
+No survey/approval booleans or mandatory road-ID list are required. Supported roads
+are extracted automatically when no list is provided. Nav2 remains opt-in: it still
+needs actual localization, body transforms and live execution-state inputs, which
+are not created just by loading this profile.
 
 Each owned process emits one `[STARTED]` record. A separate 45-second observer emits
 one `[READY]` or `[NOT READY]` record per selected subsystem: LIO tracking, GPS receipt,

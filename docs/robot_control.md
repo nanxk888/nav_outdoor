@@ -1,5 +1,7 @@
 # Orin → D1 网线控制部署与分阶段验收
 
+更新：提供有效UDP连接配置即建立连接，不再检查 hardware_authorized、interfaces_verified、survey_confirmed 人工审批字段。旧字段保留在私有文件中也会忽略。空配置仍禁用连接；接收端SDK/FSM、通信超时、数据/坐标有效性仍按实时反馈检查。去掉人工审批不代表缺失的定位、TF、导航执行节点已经实现。
+
 当前是待实机验收的接入代码，不是已完成安全认证的控制系统。默认不授权运动，不自动打开 SDK 模式，不自动起立。测试时须有人现场看护，确认急停有效、场地净空和厂家规定的支撑条件。
 
 兼容ROS 2 Humble：通过标准 `rcl_interfaces/srv/GetParameters` 服务读取 SDK 开关，不依赖厂家环境可能未提供的 `rclpy.parameter_client` 模块。不需要为接收器升级机器人ROS安装。

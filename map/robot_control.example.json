@@ -1,7 +1,4 @@
 {
-  "hardware_authorized": false,
-  "interfaces_verified": false,
-  "survey_confirmed": false,
   "orin_ip": "192.168.19.91",
   "robot_ip": "192.168.19.90",
   "robot_port": 10099,

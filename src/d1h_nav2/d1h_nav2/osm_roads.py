@@ -23,9 +23,9 @@ def nearest(p, a, b):
 
 
 class RoadGraph:
-    def __init__(self, filename, lat0, lon0, width, way_ids, campus_id='287806713'):
-        if width <= .8 or not way_ids:
-            raise ValueError('Surveyed road width >0.8m and explicit approved way IDs required')
+    def __init__(self, filename, lat0, lon0, width=3., way_ids=None, campus_id='287806713'):
+        if not math.isfinite(width) or width <= .8:
+            raise ValueError('Road corridor width must be finite and >0.8m; this is geometry, not an approval flag')
         root = ET.parse(filename).getroot()
         self.width = width
         self.xy = {n.get('id'): project(float(n.get('lat')), float(n.get('lon')), lat0, lon0)
@@ -40,14 +40,16 @@ class RoadGraph:
             return result
         self.contains=inside
         self.edges = []
-        for wid in way_ids:
+        automatic=not way_ids
+        for wid in (way_ids or list(ways)):
             w = ways[str(wid)]
             tags = {t.get('k'):t.get('v') for t in w.findall('tag')}
             if (tags.get('highway') not in {'service','footway','path','pedestrian','living_street','residential'}
                     or tags.get('access') in {'no','private'} or tags.get('foot') == 'no'
                     or tags.get('bridge') == 'yes' or tags.get('tunnel') == 'yes'
                     or tags.get('layer','0') != '0'):
-                raise ValueError('Unsupported/restricted approved way: '+str(wid))
+                if automatic:continue
+                raise ValueError('Unsupported/restricted way: '+str(wid))
             ids = [n.get('ref') for n in w.findall('nd')]
             for a,b in zip(ids, ids[1:]):
                 if a != b and self.xy[a] != self.xy[b] and inside(self.xy[a]) and inside(self.xy[b]):
@@ -55,7 +57,7 @@ class RoadGraph:
                     direction = tags.get('oneway','no')
                     self.edges.append((a,b,direction))
         if not self.edges:
-            raise ValueError('Approved roads contain no campus segments')
+            raise ValueError('OSM contains no supported ground-level roads within the deployment boundary')
 
     def distance(self, p):
         return min(math.dist(p, nearest(p,self.xy[a],self.xy[b])) for a,b,_ in self.edges)

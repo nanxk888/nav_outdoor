@@ -47,10 +47,8 @@ def configure(context):
         import json
         profile=Path(arg('nav_profile')).expanduser()
         if not profile.is_absolute() or not profile.is_file():
-            raise RuntimeError('with_nav requires nav_profile:=/absolute/path/to/reviewed_profile.json')
+            raise RuntimeError('with_nav requires nav_profile:=/absolute/path/to/osm_profile.json')
         p=json.loads(profile.read_text(encoding='utf-8'))
-        if p.get('survey_confirmed') is not True or not p.get('approved_way_ids'):
-            raise RuntimeError('Nav profile must confirm survey and approved_way_ids; example profile is not deployable')
         if not Path(p.get('osm_file','')).is_absolute() or not Path(p['osm_file']).is_file():
             raise RuntimeError('Nav profile osm_file must exist at an absolute path')
     if enabled('with_gps_driver'):
@@ -116,7 +114,7 @@ def generate_launch_description():
         DeclareLaunchArgument('workspace',description='Absolute source checkout path'),
         DeclareLaunchArgument('domain',default_value='0'),
         DeclareLaunchArgument('log_level',default_value='error'),
-        DeclareLaunchArgument('control_config',default_value='',description='Optional private reviewed control config; empty disables robot control'),
+        DeclareLaunchArgument('control_config',default_value='',description='Optional private UDP connection config; empty disables robot control'),
         DeclareLaunchArgument('with_gps_driver',default_value='true'),
         DeclareLaunchArgument('gps_driver_root',default_value='/workspace/d1h-autonomy-final'),
         DeclareLaunchArgument('gps_driver_config',default_value='/workspace/d1h-autonomy-final/.local/robot/perception/gnss.yaml'),
@@ -126,7 +124,7 @@ def generate_launch_description():
         DeclareLaunchArgument('with_memory',default_value='true'),
         DeclareLaunchArgument('sensor_height_m',default_value='0.46',description='Measured INITIAL Livox IMU height; override if not in verified low stance'),
         DeclareLaunchArgument('with_nav',default_value='false'),
-        DeclareLaunchArgument('nav_profile',default_value='',description='Reviewed OSM profile required when with_nav:=true'),
+        DeclareLaunchArgument('nav_profile',default_value='',description='OSM geometry/datum profile required when with_nav:=true'),
         DeclareLaunchArgument('with_gnss_gate',default_value='true'),
         DeclareLaunchArgument('with_web',default_value='true'),
         DeclareLaunchArgument('gps_cyclonedds_xml',default_value='/workspace/d1h-autonomy-final/.local/robot/perception/cyclonedds.xml'),

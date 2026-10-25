@@ -17,8 +17,8 @@ def main():
     assert 80<=int(os.environ.get('ROS_DOMAIN_ID','-1'))<=99,'Use isolated ROS_DOMAIN_ID=89'
     fixture=RoadsTest();fixture.setUp()
     profile=pathlib.Path(fixture.tmp.name)/'profile.json'
-    profile.write_text(json.dumps(dict(survey_confirmed=True,osm_file=str(fixture.file),
-        datum_latitude_deg=0.,datum_longitude_deg=0.,minimum_road_width_m=4.,approved_way_ids=[20,21])))
+    profile.write_text(json.dumps(dict(osm_file=str(fixture.file),
+        datum_latitude_deg=0.,datum_longitude_deg=0.,road_width_m=4.)))
     rclpy.init(args=['--ros-args','-p','profile:='+str(profile)])
     node=OsmRoadPlanner();client_node=rclpy.create_node('road_action_test')
     client=ActionClient(client_node,ComputePathToPose,'/roads/compute_path_to_pose')

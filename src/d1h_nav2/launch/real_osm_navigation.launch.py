@@ -19,8 +19,6 @@ from nav2_common.launch import RewrittenYaml
 def configure(context):
     profile=os.path.abspath(LaunchConfiguration('profile').perform(context))
     with open(profile,encoding='utf-8') as f:p=json.load(f)
-    if not p.get('survey_confirmed') or not p.get('approved_way_ids'):
-        raise RuntimeError('Confirm datum, surveyed minimum clear width and approved OSM way IDs in profile first')
     if not os.path.isabs(p['osm_file']) or not os.path.isfile(p['osm_file']):
         raise RuntimeError('profile.osm_file must be an existing absolute Linux path')
     share=get_package_share_directory('d1h_nav2')
@@ -73,5 +71,5 @@ def configure(context):
 
 
 def generate_launch_description():
-    return LaunchDescription([DeclareLaunchArgument('profile',description='Absolute path to reviewed real OSM JSON profile'),
+    return LaunchDescription([DeclareLaunchArgument('profile',description='Absolute path to OSM geometry/datum JSON profile (no approval fields required)'),
                               OpaqueFunction(function=configure)])

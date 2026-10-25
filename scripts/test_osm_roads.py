@@ -47,8 +47,10 @@ class RoadsTest(unittest.TestCase):
     def test_no_route_does_not_fallback_to_free_space(self):
         with self.assertRaises(ValueError):self.graph.route((0.,0.),(11.,11.),lambda a,b:a==b)
 
-    def test_missing_review_rejected(self):
-        with self.assertRaises(ValueError):RoadGraph(self.file,0,0,4.,[])
+    def test_no_approval_list_automatically_uses_supported_roads(self):
+        graph=RoadGraph(self.file,0,0,4.,[])
+        self.assertEqual(len(graph.edges),4)
+        self.assertTrue(graph.route((0.,0.),(11.,11.)))
 
     def test_projection_matches_enu(self):
         self.assertAlmostEqual(project(.0001,.0001,0,0)[0],11.131949079,places=6)

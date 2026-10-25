@@ -5,6 +5,8 @@ from pathlib import Path
 import queue
 import sys
 import time
+import tempfile
+import json
 import types
 import unittest
 from unittest.mock import patch
@@ -48,6 +50,17 @@ class ControlTests(unittest.TestCase):
         with patch.dict(os.environ,{},clear=True): c=Control(object())
         self.assertEqual(c.phase,'DISABLED')
         with self.assertRaises(ValueError):c.enqueue('start',{})
+
+    def test_connection_needs_no_manual_approval_flags(self):
+        with tempfile.TemporaryDirectory() as directory:
+            p=Path(directory);(p/'udp.key').write_text('x'*64)
+            (p/'control.json').write_text(json.dumps(dict(orin_ip='127.0.0.1',robot_ip='127.0.0.1',robot_port=10099,
+                key_file=str(p/'udp.key'),hardware_authorized=False,interfaces_verified=False,survey_confirmed=False)))
+            node=types.SimpleNamespace(create_subscription=lambda *a:None,create_timer=lambda *a:None)
+            with patch.dict(os.environ,{'NXK_CONTROL_CONFIG':str(p/'control.json')}),patch.dict(Control.__init__.__globals__,{'ActionClient':lambda *a:object()}):
+                c=Control(node)
+                try:self.assertEqual(c.phase,'IDLE');self.assertIsNotNone(c.sock)
+                finally:c.close()
 
     def test_ready_zero(self):
         c=self.instance();c.tick()
@@ -103,6 +116,11 @@ class ControlTests(unittest.TestCase):
 
     def test_no_fusion_no_navigation(self):
         c=self.instance('NAVIGATING');c.tick();self.assertEqual(c.phase,'STOPPED')
+
+    def test_navigation_has_no_survey_gate_but_keeps_live_readiness(self):
+        c=self.instance();c.config={'datum_latitude_deg':0.,'datum_longitude_deg':0.}
+        c.nav=types.SimpleNamespace(server_is_ready=lambda:False)
+        with self.assertRaisesRegex(ValueError,'chain incomplete'):c.start_goal({'latitude':0.,'longitude':0.})
 
     def test_safety_requires_measurement_time(self):
         c=self.instance();c.safety_time=time.monotonic()

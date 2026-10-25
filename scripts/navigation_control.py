@@ -19,7 +19,7 @@ class Control:
     def __init__(self, node):
         self.node = node
         self.requests = queue.Queue(maxsize=16)
-        self.phase = 'DISABLED'; self.reason = 'No reviewed control configuration'
+        self.phase = 'DISABLED'; self.reason = 'No robot UDP connection configuration'
         self.state_since = time.monotonic(); self.browser = 0.; self.cmd_time = 0.
         self.cmd = (0., 0.); self.robot = {}; self.robot_time = 0.
         self.safety = {}; self.safety_time = 0.; self.seq = 0
@@ -31,8 +31,6 @@ class Control:
         if not filename: return
         self.config = json.loads(Path(filename).read_text())
         c = self.config
-        if c.get('hardware_authorized') is not True or c.get('interfaces_verified') is not True:
-            self.reason = 'Hardware/SDK interfaces not authorized'; return
         self.key = Path(c['key_file']).read_bytes().strip()
         if len(self.key) < 32: raise ValueError('Shared key too short')
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -96,10 +94,14 @@ class Control:
         self.sock.sendto(encode(data, self.key), self.target)
 
     def start_goal(self, value):
-        if self.phase != 'READY' or not self.safe() or not self.nav.server_is_ready():
-            raise ValueError('Need loco READY, fresh fused safety status and Nav2 server')
+        if self.phase != 'READY':raise ValueError('Navigation chain incomplete: robot must be attached in loco READY')
+        if not self.nav.server_is_ready():raise ValueError('Navigation chain incomplete: Nav2 action server is not running')
+        if not self.safe():raise ValueError('Navigation chain incomplete: live body/map localization and perception status is missing/stale; this is not road approval')
         c = self.config; lat, lon = value['latitude'], value['longitude']
-        if not c.get('survey_confirmed'):raise ValueError('Surveyed map datum required for navigation')
+        if any(type(c.get(k)) not in (int,float) or not math.isfinite(c[k]) for k in ('datum_latitude_deg','datum_longitude_deg')):
+            raise ValueError('Map datum coordinates missing/invalid; this is coordinate configuration, not approval')
+        if not -90<=c['datum_latitude_deg']<=90 or not -180<=c['datum_longitude_deg']<=180:
+            raise ValueError('Map datum coordinates out of range')
         robot_pose=self.robot.get('pose',{})
         pending_pose=getattr(self,'pose',None) or {}
         if any(abs(p.get(k,0))>1e-5 for p in (robot_pose,pending_pose,self.robot.get('pose_target',{})) for k in ('roll_rad','pitch_rad')):
