@@ -93,6 +93,20 @@ class WebTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as c:self.post('/api/operator/goal',{'latitude':999,'longitude':1})
         self.assertEqual(c.exception.code,400)
 
+    def test_local_candidate_goal_requires_ready_epoch(self):
+        old_pub=self.m.memory_goal_pub;old_string=self.m.String;received=[]
+        self.m.memory_goal_pub=types.SimpleNamespace(publish=lambda m:received.append(json.loads(m.data)))
+        self.m.String=types.SimpleNamespace
+        try:
+            self.m.save('memory',json.dumps(dict(ready=True,frame='lio_odom',epoch='test')))
+            self.m.save('lio',dict(frame='lio_odom',position=[0.,0.,0.]))
+            with self.post('/api/operator/lio_goal',dict(x=1.,y=2.,frame='lio_odom',epoch='test')) as r:
+                reply=json.load(r);self.assertTrue(reply['candidate_only']);self.assertFalse(reply['executed'])
+            self.assertEqual(len(received),1)
+            with self.assertRaises(HTTPError):self.post('/api/operator/lio_goal',dict(x=1.,y=2.,frame='lio_odom',epoch='old'))
+            self.assertEqual(len(received),1)
+        finally:self.m.memory_goal_pub=old_pub;self.m.String=old_string
+
     def test_no_origin(self):
         with self.assertRaises(HTTPError) as c:self.post('/api/operator/heading',{'heading_deg':0},False)
         self.assertEqual(c.exception.code,403)

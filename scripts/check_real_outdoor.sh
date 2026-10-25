@@ -31,6 +31,8 @@ python3 scripts/test_real_ground.py
 python3 scripts/test_real_cloud_ros.py
 python3 scripts/test_osm_roads.py
 python3 scripts/test_obstacle_memory.py
+python3 scripts/test_observed_memory.py
+python3 scripts/test_lio_memory_ros.py
 python3 scripts/test_station_keep.py
 python3 scripts/test_stable_planner.py
 python3 scripts/test_path_handover.py

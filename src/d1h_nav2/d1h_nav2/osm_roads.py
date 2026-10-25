@@ -38,6 +38,7 @@ class RoadGraph:
                 if (b>y)!=(d>y) and x < (c-a)*(y-b)/(d-b)+a:
                     result = not result
             return result
+        self.contains=inside
         self.edges = []
         for wid in way_ids:
             w = ways[str(wid)]
@@ -59,15 +60,22 @@ class RoadGraph:
     def distance(self, p):
         return min(math.dist(p, nearest(p,self.xy[a],self.xy[b])) for a,b,_ in self.edges)
 
-    def route(self, start, goal, clear=lambda a,b: True, snap_limit=2.):
+    def route(self, start, goal, clear=lambda a,b: True, snap_limit=2.,
+              offroad_start_limit=0., connector_clear=None):
+        if not self.contains(start) or not self.contains(goal):raise ValueError('Start/goal outside deployment campus boundary')
         # Attach to road SEGMENTS, not just vertices. No free-space shortcut.
         attachments = []
-        for p in (start,goal):
+        for index,p in enumerate((start,goal)):
             candidates = [(math.dist(p,q),i,q) for i,(a,b,_) in enumerate(self.edges)
                           for q in [nearest(p,self.xy[a],self.xy[b])]]
             d,i,q = min(candidates)
-            if d > min(snap_limit,self.width/2-.32) or not clear(p,q):
-                raise ValueError('Start/goal outside approved road corridor or blocked connector')
+            in_corridor=d <= min(snap_limit,self.width/2-.32)
+            if not in_corridor:
+                if index!=0 or not 0<offroad_start_limit<=30 or d>offroad_start_limit or connector_clear is None or not connector_clear(p,q):
+                    raise ValueError('Off-road start needs bounded observed-free access; off-road goal remains unsupported')
+                if not all(self.contains(v) for v in sample(p,q)):raise ValueError('Connector leaves deployment campus boundary')
+            elif not clear(p,q):
+                raise ValueError('Start/goal connector blocked')
             attachments.append((i,q))
         xy = dict(self.xy); xy['S']=start;xy['G']=goal
         graph = {}
@@ -81,7 +89,11 @@ class RoadGraph:
             for u,v in zip(chain,chain[1:]):
                 if direction!='-1':link(u,v)
                 if direction not in {'yes','1','true'}:link(v,u)
-        for u,v in [('S','P'),('Q','G')]:link(u,v);link(v,u)
+        # Do not snap/teleport the robot pose. Keep the true start in the path.
+        if self.distance(start)>min(snap_limit,self.width/2-.32):
+            graph.setdefault('S',[]).append(('P',math.dist(start,xy['P'])))
+        else:link('S','P');link('P','S')
+        link('Q','G');link('G','Q')
         queue=[(math.dist(start,goal),0.,'S')]; costs={'S':0.}; parent={}
         while queue:
             _,cost,u=heapq.heappop(queue)

@@ -53,6 +53,12 @@ async function click(x,y){$('osm').handlers.pointerdown(event(x,y));await $('osm
  assert.equal(obstacleDraws,beforeStale,'stale obstacles hidden in both views');
  scan.lio.value.epoch='two';context.NavMaps.update({samples:scan},true);
  assert($('alignmentState').textContent.includes('未对齐'),'new LIO epoch cancels alignment');
+ scan.memory={receive_age_sec:0,value:JSON.stringify({ready:true,frame:'lio_odom',epoch:'memory-test',source_stamp:now,
+  resolution_m:.25,cells:[[0,0,0],[2,0,100]],cell_count:2,retention_sec:120,route:{points:[[0,0],[1,0]],partial:true},reason:'test'})};
+ context.NavMaps.update({samples:scan},true);assert($('memoryHint').textContent.includes('观察记忆'));
+ $('pickLioGoal').onclick();$('plot').handlers.pointerdown(event(600,400));await $('plot').handlers.pointerup(event(600,400));
+ assert.equal(posts.at(-1)[0],'/api/operator/lio_goal');assert.equal(posts.at(-1)[1].epoch,'memory-test');
+ assert.equal(scan.gps.value.valid,false,'GPS-free local goal must work without valid GPS');
  assert(!posts.some(p=>p[0].startsWith('/api/control')),'map actions must never start motion');
  console.log('PASS: GPS success/no-fix/stale/disconnect feedback; target selection; drag suppression; heading validation; main/mini swap; no motion requests');
 })().catch(e=>{console.error(e);process.exitCode=1});

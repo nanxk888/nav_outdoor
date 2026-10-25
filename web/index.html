@@ -11,13 +11,10 @@
 </main>
 <aside id="drawer" class="drawer" hidden aria-label="参数与状态"><div class="drawer-title"><h2>参数与状态</h2><button id="closeDrawer" aria-label="关闭参数">✕</button></div>
  <section><h3>机器人电量</h3><p id="robotBattery" role="status">电池1：未收到 · 电池2：未收到（每60秒获取）</p></section>
- <section><h3>初始方向与地理对齐</h3><p>机头朝向：真北0°，东90°。有效GPS且机器人静止时点击对齐。以下安装参数默认零仅作近似，需实测；不会修改ROS定位或启动导航。</p>
+ <section><h3>初始方向与地理对齐</h3><p>机头朝向：真北0°，东90°。有效GPS且机器人静止时点击对齐。暂按GPS与IMU共点同向处理；不会修改ROS定位或启动导航。</p>
  <div class="input-row"><input id="headingValue" type="number" min="0" max="359.99" step="0.1" placeholder="0—359.9"><button id="saveHeading">保存预览</button></div>
- <label>IMU +X相对机头顺时针偏角 / °<input id="imuHeadingOffset" type="number" value="0" min="-360" max="360" step="0.1"></label>
- <label>IMU→GPS天线：IMU坐标X / m<input id="antennaX" type="number" value="0" step="0.01" min="-5" max="5"></label>
- <label>IMU→GPS天线：IMU坐标Y / m<input id="antennaY" type="number" value="0" step="0.01" min="-5" max="5"></label>
- <label>IMU→GPS天线：IMU坐标Z / m<input id="antennaZ" type="number" value="0" step="0.01" min="-5" max="5"></label>
- <p>按IMU轴填写天线相对IMU的位置，单位米。GPS后续更新不直接拖动点云；LIO重启/中断后重新对齐。仅在本网页会话内有效，不代表持续融合定位。</p><button id="alignGeo">机器人已静止：GPS＋方向对齐LIO</button><button id="followGeo">跟随地理LIO位置</button><button id="clearAlignment">清除地理对齐</button></section>
+ <p>暂按GPS与IMU共点、同向近似，不要求安装参数。GPS后续更新不直接拖动点云；LIO重启/中断后重新对齐。仅在本网页会话内有效，不代表持续融合定位。</p><button id="alignGeo">机器人已静止：GPS＋方向对齐LIO</button><button id="followGeo">跟随地理LIO位置</button><button id="clearAlignment">清除地理对齐</button></section>
+ <section><h3>边观测边记忆（候选规划）</h3><p id="memoryHint" role="status">等待LIO观察记忆</p><p>浅绿是已观察空闲，暗红是记忆障碍；无色是未知。蓝线是已知区候选路径，黄线只到朝目标方向的安全前沿，不代表终点可达。点云射线不保证地面可通行或无坑。</p><button id="pickLioGoal">无GPS：点选LIO相对目标</button><button id="planGeoMemory">用OSM目标生成记忆候选路径</button><p>当前仅规划预览，不自动发速度。实际执行仍需本体定位、TF、控制器及安全监督接通。</p></section>
  <section><h3>机器人控制</h3><strong id="robotFsm" role="status">机器人FSM：未知</strong><p id="controlFlow" role="status">正在读取控制状态</p><p>点击立即提交，不弹二次确认。点击loco/落下即表示操作者已确认实际停稳和现场安全。后台安全检查保留；软件停止不代替硬件急停。</p><button id="robotStart">起立：transform_up</button><button id="robotLoco">进入 loco</button><button id="robotLower">落下：transform_down</button><button id="robotStop" class="danger">停止 / 取消任务</button><p id="controlResult" role="status"></p></section>
  <section><h3>loco姿态控制</h3><p>仅停稳待机时可用。横滚±11.4°、俯仰±22.9°以内；接收器须单独授权。高度不默认开放。</p><label>横滚角 / °<input id="rollValue" type="number" value="0" step="1" min="-11.4" max="11.4"></label><label>俯仰角 / °<input id="pitchValue" type="number" value="0" step="1" min="-22.9" max="22.9"></label><button id="robotPose" disabled>确认停稳并发送姿态</button></section>
  <section><h3>数据明细</h3><p>接收年龄不等于测量延迟。展开查看原始参数。</p><details><summary>GPS 定位与质量</summary><pre id="gps"></pre><pre id="gps_status"></pre></details><details><summary>LIO 位姿与状态</summary><pre id="lio"></pre><pre id="lio_status"></pre></details><details><summary>控制链状态</summary><pre id="controlState"></pre></details></section><p class="notice">本地OSM不代表通行许可。点云叠加、融合初始化尚未接入。</p>

@@ -4,5 +4,6 @@
   "datum_latitude_deg": 34.125,
   "datum_longitude_deg": 108.829,
   "minimum_road_width_m": 0.0,
+  "offroad_start_limit_m": 10.0,
   "approved_way_ids": []
 }

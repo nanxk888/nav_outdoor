@@ -30,6 +30,8 @@ def main():
         if s.get('state')=='LIO_SENSOR_TRACKING':done('lio','sensor tracking (not base_link localization)')
     def gps(msg):done('gps','Domain 0 received GPS; fix status='+str(msg.status.status)+' (-1 means no fix)')
     def gate(msg):done('gate','gate running: '+str(state(msg).get('state','unknown')))
+    def memory(msg):
+        if state(msg).get('ready') is True:done('memory','LIO observation memory ready; candidate planning only, no motor output')
     ground={'ready':False}
     def cloud_status(msg):ground.update(state(msg))
     def cloud(msg,name):
@@ -37,7 +39,7 @@ def main():
         if -.05<=age<.5:cloud_seen.add(name)
         if len(cloud_seen)==2 and ground.get('ready'):done('cloud','ground accepted; both nav/clear streams received')
     for topic,callback in [('/navigation/lio/status',lio),('/localization/gnss/status',gate),
-                           ('/navigation/cloud_filter/status',cloud_status)]:
+                           ('/navigation/cloud_filter/status',cloud_status),('/navigation/memory/status',memory)]:
         subs.append(node.create_subscription(String,topic,callback,10))
     subs.append(node.create_subscription(NavSatFix,'/hardware/gnss/fix',gps,qos_profile_sensor_data))
     for name in ('nav','clear'):

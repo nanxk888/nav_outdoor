@@ -34,6 +34,8 @@ log/
 !/scripts/test_osm_roads.py
 !/scripts/test_osm_road_ros.py
 !/scripts/test_obstacle_memory.py
+!/scripts/test_observed_memory.py
+!/scripts/test_lio_memory_ros.py
 !/scripts/test_path_handover.py
 !/scripts/test_station_keep.py
 !/scripts/test_stable_planner.py
@@ -71,6 +73,7 @@ log/
 !/docs/real_navigation_cloud.md
 !/docs/workspace_startup.md
 !/docs/geographic_overlay.md
+!/docs/observed_navigation.md
 !/map/robot_control.example.json
 !/map/gnss_bridge.yaml
 !/web/

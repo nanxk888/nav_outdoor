@@ -7,6 +7,18 @@
  let features=[],bounds=null,loadError='',gps=null,lio=null,navCloud=null,cloudStatus=null,online=false,receivedAt=0;
  let active='lio',mode='pan',goal=null,heading=null,follow=true,trajectory=[],lastStamp=null;
  let alignment=null,lastEpoch=null,lastFrame=null,geoFollow=true;
+ let memory=null;
+ function memoryReady(){return goodLio()&&memory&&age(memory)<1.5&&memory.value?.ready&&memory.value.frame===lio.value.frame&&Math.abs(memory.value.source_stamp-lio.value.stamp)<1}
+ function drawMemory(ctx,camera,convert){
+  if(!memoryReady())return;
+  const m=memory.value,half=m.resolution_m/2;
+  for(const cell of (m.cells||[]).slice(0,3000)){ctx.fillStyle=cell[2]===100?'#d5786b88':'#5fa89622';ctx.beginPath();[[-half,-half],[half,-half],[half,half],[-half,half]].forEach(([dx,dy],i)=>{const p=camera.screen(convert([cell[0]+dx,cell[1]+dy]));i?ctx.lineTo(...p):ctx.moveTo(...p)});ctx.closePath();ctx.fill()}
+  if(m.route?.points){ctx.strokeStyle=m.route.partial?'#f4cd71':'#82bafa';ctx.lineWidth=3;ctx.beginPath();m.route.points.forEach((p,i)=>{const v=camera.screen(convert(p));i?ctx.lineTo(...v):ctx.moveTo(...v)});ctx.stroke()}
+ }
+ async function memoryGoal(p){
+  if(!memoryReady()){notify('记忆地图尚未就绪，无法生成候选路径','error');return}
+  try{const m=memory.value,r=await fetch('/api/operator/lio_goal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({x:p[0],y:p[1],frame:m.frame,epoch:m.epoch}),signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error(r.status);notify('已请求记忆候选路径：仅规划预览，不会让机器人移动')}catch(e){notify('记忆规划请求失败：'+e.message,'error')}
+ }
  function cloudReady(){const v=navCloud?.value;return goodLio()&&v?.valid&&age(navCloud)<1.5&&v.measurement_age_sec+age(navCloud)<1.5&&v.frame===lio.value.frame&&cloudStatus&&age(cloudStatus)<1.5&&cloudStatus.value?.ready===true}
  function geoReady(){return alignment&&goodLio()&&alignment.frame===lio.value.frame&&alignment.epoch===lio.value.epoch}
  const notify=(message,tone)=>window.NavUI?.notify(message,tone);
@@ -31,6 +43,7 @@
   if(goal){const p=camera.screen(project(...goal));ctx.strokeStyle='#ffcb79';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(...p,5,0,Math.PI*2);ctx.moveTo(p[0]-9,p[1]);ctx.lineTo(p[0]+9,p[1]);ctx.moveTo(p[0],p[1]-9);ctx.lineTo(p[0],p[1]+9);ctx.stroke();if(active==='gps'){ctx.fillStyle='#ffcb79';ctx.font='12px system-ui';ctx.fillText('目标预览',p[0]+12,p[1]-10)}}
   if(goodGps())marker(ctx,camera.screen(project(gps.value.longitude,gps.value.latitude)),'#79ed96',6);
   if(geoReady()){
+   drawMemory(ctx,camera,p=>alignment.point(p));
    ctx.strokeStyle='#6bdcc6';ctx.lineWidth=2;ctx.beginPath();trajectory.forEach((p,i)=>{const v=camera.screen(alignment.point(p));i?ctx.lineTo(...v):ctx.moveTo(...v)});ctx.stroke();
    if(cloudReady()){ctx.fillStyle='#ffb454';const size=Math.max(2,Math.min(5,.05*camera.scale/alignment.factor));for(const p of navCloud.value.points.slice(0,2000)){if(!finitePoint(p))continue;const v=camera.screen(alignment.point(p));ctx.fillRect(v[0]-size/2,v[1]-size/2,size,size)}}
    const p=camera.screen(alignment.point(lio.value.position));marker(ctx,p,'#5edee7',5);
@@ -50,6 +63,8 @@
   for(let x=Math.ceil(lo[0]/step)*step;x<=hi[0];x+=step){const p=camera.screen([x,0]);ctx.beginPath();ctx.moveTo(p[0],0);ctx.lineTo(p[0],camera.height);ctx.stroke()}
   for(let y=Math.ceil(lo[1]/step)*step;y<=hi[1];y+=step){const p=camera.screen([0,y]);ctx.beginPath();ctx.moveTo(0,p[1]);ctx.lineTo(camera.width,p[1]);ctx.stroke()}
   const origin=camera.screen([0,0]);ctx.fillStyle='#688a99';ctx.font='11px system-ui';ctx.fillText('LIO起点',origin[0]+8,origin[1]-8);
+  drawMemory(ctx,camera,p=>p);
+  $('memoryHint').textContent=memoryReady()?`观察记忆（抽样显示） ${memory.value.cell_count}格 / ${memory.value.retention_sec}s · ${memory.value.route?.reason||memory.value.reason} · 仅候选规划，未接运动`:'等待LIO观察记忆；未知区域不当作空闲';
   const cv=navCloud?.value;
   let reason='等待导航障碍点云';
   if(!online)reason='网关断开，障碍预览已隐藏';
@@ -73,7 +88,7 @@
   $('lioHome').textContent=follow?'LIO 跟随中':'跟随 LIO';
  }
  function draw(){drawGps();drawLio();const c=cameras[active],factor=active==='gps'?Math.cos(unproject(c.x,c.y)[1]*Math.PI/180):1;const m=100/c.scale*factor;$('scaleLabel').textContent=`100像素 ≈ ${m>=1?m.toFixed(1)+' m':(m*100).toFixed(1)+' cm'}${active==='gps'?' · 缩放不代表定位精度':''}`}
- function setMode(value){mode=value;$('gpsView').classList.toggle('selecting',value!=='pan');$('pickGoal').textContent=value==='goal'?'取消选点':'＋ 选择目标'}
+ function setMode(value){mode=value;$('gpsView').classList.toggle('selecting',value!=='pan'&&value!=='lio_goal');$('lioView').classList.toggle('selecting',value==='lio_goal');$('pickGoal').textContent=value==='goal'?'取消选点':'＋ 选择目标'}
  function show(view){active=view;for(const v of ['gps','lio']){$(v+'View').classList.toggle('is-main',v===view);$(v+'View').classList.toggle('is-mini',v!==view)}setMode('pan');$('swapView').textContent=view==='lio'?'切换全局地图':'切换LIO视图';requestAnimationFrame(draw)}
  async function submit(kind,value){try{const r=await fetch('/api/operator/'+kind,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value),signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error(r.status);await r.json();$('operatorResult').textContent=kind==='goal'?'目标预览已保存，未下发导航；道路可达性尚未审核。':'方向预览已保存，未修改融合定位。';notify(kind==='goal'?'目标预览已保存，未启动导航':'初始方向预览已保存，未执行');return true}catch(e){$('operatorResult').textContent='保存失败或结果未知：'+e.message;notify('保存失败或结果未知，请重试','error');return false}}
  function point(canvas,e){const r=canvas.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top]}
@@ -83,6 +98,7 @@
   canvas.addEventListener('pointermove',e=>{if(!down)return;const p=point(canvas,e);if(Math.hypot(p[0]-down[0],p[1]-down[1])>5)moved=true;if(!mini&&moved&&!(view==='gps'&&mode==='heading')){cameras[view].pan(p[0]-last[0],p[1]-last[1]);if(view==='lio')follow=false;else geoFollow=false;draw()}last=p});
   canvas.addEventListener('pointerup',async e=>{if(!down)return;const p=point(canvas,e),start=down;down=null;
    if(mini){if(!moved)show(view);return}
+   if(view==='lio'&&mode==='lio_goal'&&!moved){setMode('pan');await memoryGoal(cameras.lio.world(p));return}
    if(view==='gps'&&mode==='goal'&&!moved){const v=unproject(...cameras.gps.world(p));if(!bounds){notify('地图尚未就绪','error');return}const world=project(...v);if(world[0]<bounds[0]||world[0]>bounds[2]||world[1]<bounds[1]||world[1]>bounds[3]){notify('目标超出本地地图覆盖范围','error');return}goal=v;$('targetSummary').textContent='保存目标中…';draw();setMode('pan');if(await submit('goal',{longitude:v[0],latitude:v[1]}))$('targetSummary').textContent=`${v[1].toFixed(7)}° N, ${v[0].toFixed(7)}° E`;else $('targetSummary').textContent='目标未确认保存';}
    else if(view==='gps'&&mode==='heading'&&moved){heading=(Math.atan2(p[0]-start[0],start[1]-p[1])*180/Math.PI+360)%360;$('headingValue').value=heading.toFixed(1);$('headingSummary').textContent=`方向预览 ${heading.toFixed(1)}°`;setMode('pan');await submit('heading',{heading_deg:heading})}
   });
@@ -99,20 +115,23 @@
   if(!goodGps()||!goodLio())throw Error('需要新鲜有效GPS和LIO，当前不能对齐');
   const ga=Date.now()/1000-gps.value.stamp,la=Date.now()/1000-lio.value.stamp;
   if(!Number.isFinite(ga)||!Number.isFinite(la)||ga<-.1||la<-.1||ga>2||la>1)throw Error('测量时间已过期或电脑与Orin时钟不一致');
-  const ids=['headingValue','imuHeadingOffset','antennaX','antennaY','antennaZ'];
+  const ids=['headingValue'];
   if(ids.some(id=>!$(id).value.trim()))throw Error('请填写实际初始方向与安装参数');
-  const [h,o,x,y,z]=ids.map(id=>Number($(id).value));
-  alignment=NavGeoAlignment.create(gps.value,lio.value,h,o,[x,y,z]);geoFollow=true;
+  const [h]=ids.map(id=>Number($(id).value));
+  alignment=NavGeoAlignment.create(gps.value,lio.value,h,0,[0,0,0]);geoFollow=true;
   cameras.gps.scale=8*alignment.factor;show('gps');notify('已静止对齐，仅显示配准；未启用GPS持续融合或导航');
  }catch(e){notify(e.message,'error')}};
  $('clearAlignment').onclick=()=>{alignment=null;draw();notify('已清除地理对齐，不影响LIO或机器人控制')};
  $('followGeo').onclick=()=>{show('gps');geoFollow=true;draw();if(!geoReady())notify('请先完成有效的GPS＋LIO地理对齐','error')};
- for(const id of ['headingValue','imuHeadingOffset','antennaX','antennaY','antennaZ'])$(id).addEventListener('input',()=>{if(alignment){alignment=null;draw();notify('方向或安装参数已更改，请重新静止对齐')}});
+ $('pickLioGoal').onclick=()=>{show('lio');setMode('lio_goal');notify('点击LIO视图设置相对目标，仅生成记忆候选路径')};
+ $('planGeoMemory').onclick=()=>{if(!geoReady()||!goal){notify('先完成地理对齐并选择OSM目标','error');return}memoryGoal(alignment.unpoint(project(...goal)))};
+ for(const id of ['headingValue'])$(id).addEventListener('input',()=>{if(alignment){alignment=null;draw();notify('方向已更改，请重新静止对齐')}});
  $('mapHome').onclick=()=>{geoFollow=false;show('gps');if(bounds){cameras.gps.fit(bounds);draw()}else notify('地图尚未加载','error')};
  $('gpsHome').onclick=()=>{geoFollow=false;show('gps');if(!online){notify('网关未连接，无法定位GPS','error');return}if(!gps){notify('尚未收到GPS数据，请检查驱动和桥接','error');return}if(age(gps)>=2){notify('GPS数据已过期，无法定位','error');return}if(!goodGps()){notify('当前无GPS信号，尚未获得有效经纬度','error');return}
   const p=project(gps.value.longitude,gps.value.latitude);cameras.gps.x=p[0];cameras.gps.y=p[1];cameras.gps.scale=Math.max(cameras.gps.scale,1.5);draw();notify('定位成功：已居中显示原始GPS位置（非融合定位）')};
  $('lioHome').onclick=()=>{show('lio');follow=true;draw();notify(goodLio()?'已跟随LIO相对位置':'LIO暂无新鲜数据，等待输入',goodLio()?'info':'error')};
  window.NavMaps={show,draw,update(response,connected){online=connected;gps=response?.samples?.gps||null;lio=response?.samples?.lio||null;navCloud=response?.samples?.nav_cloud||null;cloudStatus=response?.samples?.cloud_status||null;
+   memory=response?.samples?.memory||null;if(memory&&typeof memory.value==='string'){try{memory={...memory,value:JSON.parse(memory.value)}}catch(e){memory=null}}
    const reset=!connected||!lio||lio.value.epoch!==lastEpoch||lio.value.frame!==lastFrame||lio.value.stamp<lastStamp||(lastStamp!==null&&lio.value.stamp-lastStamp>1)||lio.receive_age_sec>=1;
    if(reset){trajectory=[];if(alignment){alignment=null;notify('LIO中断或坐标重置，旧地理对齐已取消，请静止重新对齐','error')}}
    lastEpoch=lio?.value.epoch;lastFrame=lio?.value.frame;

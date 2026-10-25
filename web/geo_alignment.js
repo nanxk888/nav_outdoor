@@ -18,6 +18,7 @@
   const sigma=gps.covariance_type>0&&Array.isArray(cv)&&[cv[0],cv[4]].every(v=>Number.isFinite(v)&&v>=0)?Math.sqrt(Math.max(cv[0],cv[4])):null;
   return {frame:lio.frame,epoch:lio.epoch,stamp:lio.stamp,factor,rotation,sigma,
    point(p){const dx=p[0]-origin[0],dy=p[1]-origin[1];return [base[0]+(c*dx-s*dy)/factor,base[1]+(s*dx+c*dy)/factor]},
+   unpoint(p){const dx=(p[0]-base[0])*factor,dy=(p[1]-base[1])*factor;return [origin[0]+c*dx+s*dy,origin[1]-s*dx+c*dy]},
    yaw(q){const [x,y,z,w]=q;return Math.atan2(2*(w*z+x*y),1-2*(y*y+z*z))+rotation}
   };
  }

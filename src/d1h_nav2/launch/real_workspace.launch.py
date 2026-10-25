@@ -84,6 +84,9 @@ def configure(context):
                    parameters=[{'use_sim_time':False,'sensor_height_m':height}],
                    arguments=['--ros-args','--log-level',arg('log_level')],output='screen')
         critical.append(cloud)
+    if enabled('with_memory'):
+        critical.append(Node(package='d1h_nav2',executable='lio_memory',name='lio_observed_memory',
+            parameters=[{'use_sim_time':False}],arguments=['--ros-args','--log-level',arg('log_level')],output='screen'))
     if enabled('with_web'):
         web=ExecuteProcess(cmd=[sys.executable,str(root/'scripts/navigation_web.py')],output='screen',
                            additional_env={'NXK_CONTROL_CONFIG':arg('control_config'),
@@ -101,7 +104,7 @@ def configure(context):
     actions.extend(critical)
     checks=[]
     for flag,label in [('with_lio','lio'),('with_gps_bridge','gps'),('with_gnss_gate','gate'),
-                       ('with_nav_cloud','cloud'),('with_web','web'),('with_nav','nav')]:
+                       ('with_nav_cloud','cloud'),('with_memory','memory'),('with_web','web'),('with_nav','nav')]:
         if enabled(flag):checks.append(label)
     actions.append(ExecuteProcess(cmd=[sys.executable,str(root/'scripts/workspace_startup_check.py'),
         '--checks',','.join(checks)],output='screen',name='startup_readiness'))
@@ -120,6 +123,7 @@ def generate_launch_description():
         DeclareLaunchArgument('with_gps_bridge',default_value='true'),
         DeclareLaunchArgument('with_lio',default_value='true'),
         DeclareLaunchArgument('with_nav_cloud',default_value='true'),
+        DeclareLaunchArgument('with_memory',default_value='true'),
         DeclareLaunchArgument('sensor_height_m',default_value='0.46',description='Measured INITIAL Livox IMU height; override if not in verified low stance'),
         DeclareLaunchArgument('with_nav',default_value='false'),
         DeclareLaunchArgument('nav_profile',default_value='',description='Reviewed OSM profile required when with_nav:=true'),

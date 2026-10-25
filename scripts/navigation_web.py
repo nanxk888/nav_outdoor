@@ -1,4 +1,4 @@
-"""Loopback-only, read-only ROS2 dashboard. No actuator or goal publishers."""
+"""Loopback dashboard with explicit guarded control and non-motion candidate requests."""
 import json
 import math
 import os
@@ -22,6 +22,7 @@ lock = threading.Lock()
 samples = {}
 operator_settings = {}
 control = None
+memory_goal_pub = None
 last_cloud_receive=-100.
 lio_epoch=uuid.uuid4().hex
 previous_lio=None
@@ -118,7 +119,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(403)
             return
         is_control = self.path.startswith('/api/control/')
-        if self.path not in ('/api/operator/goal', '/api/operator/heading') and not is_control:
+        if self.path not in ('/api/operator/goal', '/api/operator/heading','/api/operator/lio_goal') and not is_control:
             self.send_error(404)
             return
         try:
@@ -126,6 +127,20 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < size <= 1024:
                 raise ValueError('invalid body length')
             value = json.loads(self.rfile.read(size))
+            if self.path=='/api/operator/lio_goal':
+                if set(value)!={'x','y','frame','epoch'} or any(type(value[k]) not in (int,float) or not math.isfinite(value[k]) for k in ('x','y')):
+                    raise ValueError('Invalid local goal')
+                with lock:record=samples.get('memory');local=samples.get('lio')
+                if not record or time.monotonic()-record['received_monotonic']>1:raise ValueError('Memory unavailable')
+                info=json.loads(record['value'])
+                if not info.get('ready') or info['frame']!=value['frame'] or info['epoch']!=value['epoch'] or memory_goal_pub is None:
+                    raise ValueError('Memory epoch not ready')
+                if not local or time.monotonic()-local['received_monotonic']>1 or local['value']['frame']!=value['frame'] or math.dist(local['value']['position'][:2],(value['x'],value['y']))>100:
+                    raise ValueError('LIO unavailable or candidate goal exceeds 100m')
+                request=dict(value,request_time=time.time());memory_goal_pub.publish(String(data=json.dumps(request)))
+                body=json.dumps({'queued':True,'candidate_only':True,'executed':False}).encode()
+                self.send_response(202);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)))
+                self.end_headers();self.wfile.write(body);return
             if is_control:
                 if not control.status().get('enabled'):
                     raise ValueError('Hardware control configuration is disabled')
@@ -203,18 +218,19 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global osm_data, control
+    global osm_data, control, memory_goal_pub
     osm_data = load_osm()
     rclpy.init()
     node = rclpy.create_node('navigation_web_readonly')
     from navigation_control import Control
     control = Control(node)
+    memory_goal_pub=node.create_publisher(String,'/navigation/memory/goal_candidate',1)
     subs = [node.create_subscription(NavSatFix, '/hardware/gnss/fix', fix, qos_profile_sensor_data),
             node.create_subscription(PointCloud2,'/livox/lidar/pointcloud_nav',cloud,qos_profile_sensor_data),
             node.create_subscription(Odometry, '/navigation/lio/odometry', odom, qos_profile_sensor_data)]
     for topic, key in [('/localization/gnss/status', 'gps_status'),
                        ('/navigation/lio/status', 'lio_status'),
-                       ('/navigation/cloud_filter/status','cloud_status')]:
+                       ('/navigation/cloud_filter/status','cloud_status'),('/navigation/memory/status','memory')]:
         subs.append(node.create_subscription(String, topic, lambda m, k=key: save(k, m.data), 10))
     subs.append(node.create_subscription(RosPath, '/plan', lambda m: save('plan', {
         'frame': m.header.frame_id, 'points': [[p.pose.position.x, p.pose.position.y]

@@ -1,5 +1,6 @@
 """Isolated ROS action/interface smoke test. No simulated or real motors."""
 import json
+import os
 import pathlib
 import threading
 import rclpy
@@ -8,9 +9,12 @@ from rclpy.executors import MultiThreadedExecutor
 from nav2_msgs.action import ComputePathToPose
 from test_osm_roads import RoadsTest
 from d1h_nav2.osm_road_planner import OsmRoadPlanner
+from nav_msgs.msg import OccupancyGrid
+from array import array
 
 
 def main():
+    assert 80<=int(os.environ.get('ROS_DOMAIN_ID','-1'))<=99,'Use isolated ROS_DOMAIN_ID=89'
     fixture=RoadsTest();fixture.setUp()
     profile=pathlib.Path(fixture.tmp.name)/'profile.json'
     profile.write_text(json.dumps(dict(survey_confirmed=True,osm_file=str(fixture.file),
@@ -37,10 +41,19 @@ def main():
         node.on_map(node.grid)
         result=wait(wait(client.send_goal_async(goal)).get_result_async())
         assert result.status==4 and len(result.result.path.poses)>20
+        access=OccupancyGrid();access.header.frame_id='map';access.header.stamp=client_node.get_clock().now().to_msg()
+        access.info.resolution=.25;access.info.width=100;access.info.height=100
+        access.info.origin.position.x=-10.;access.info.origin.position.y=-10.;access.info.origin.orientation.w=1.
+        access.data=array('b',[0]*10000);node.on_access(access)
+        goal.start.pose.position.x=5.;goal.start.pose.position.y=-4.
+        goal.goal.pose.position.x=8.;goal.goal.pose.position.y=0.
+        result=wait(wait(client.send_goal_async(goal)).get_result_async())
+        assert result.status==4 and result.result.path.poses[0].pose.position.y==-4.,'true offroad start must remain in route'
+        assert node.access_segment is not None
         goal.goal.pose.position.x=5.;goal.goal.pose.position.y=5.
         result=wait(wait(client.send_goal_async(goal)).get_result_async())
         assert result.status==6 and not result.result.path.poses
-        print('PASS: ROS action success; missing map/offroad goal rejected; latched road grid generated')
+        print('PASS: ROS road action + observed offroad start access; true start preserved; missing map/offroad goal rejected')
     finally:
         executor.shutdown();thread.join();client.destroy();client_node.destroy_node();node.destroy_node()
         rclpy.shutdown();fixture.tearDown()

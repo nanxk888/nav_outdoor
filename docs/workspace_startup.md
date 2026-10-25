@@ -41,6 +41,9 @@ not a permanent height assumption: 0.46 m is only appropriate for the measured l
 Override it when initializing in a different stance. Disable with `with_nav_cloud:=false`.
 Livox hardware driver remains externally managed; do not start a duplicate driver.
 
+LIO observation memory and candidate-only planning now also start by default
+(`with_memory:=false` disables them). See [observed_navigation.md](observed_navigation.md).
+
 To include the existing Nav2/OSM planning launch in this same command:
 
 ```bash

@@ -36,6 +36,14 @@ class RoadsTest(unittest.TestCase):
     def test_offroad_goal_rejected(self):
         with self.assertRaises(ValueError):self.graph.route((0.,0.),(5.,5.))
 
+    def test_offroad_start_nearest_connector_requires_evidence(self):
+        start=(5.,-4.)
+        with self.assertRaises(ValueError):self.graph.route(start,(8.,0.),offroad_start_limit=10.)
+        with self.assertRaises(ValueError):self.graph.route(start,(8.,0.),offroad_start_limit=10.,connector_clear=lambda a,b:False)
+        route=self.graph.route(start,(8.,0.),offroad_start_limit=10.,connector_clear=lambda a,b:True)
+        self.assertEqual(route[0],start);self.assertEqual(route[1],(5.,0.))
+        with self.assertRaises(ValueError):self.graph.route(start,(8.,0.),offroad_start_limit=2.,connector_clear=lambda a,b:True)
+
     def test_no_route_does_not_fallback_to_free_space(self):
         with self.assertRaises(ValueError):self.graph.route((0.,0.),(11.,11.),lambda a,b:a==b)
 

@@ -4,6 +4,8 @@
 
 OSM叠加GPS、LIO轨迹与障碍点：见 [geographic_overlay.md](docs/geographic_overlay.md)。需静止时显式对齐，仅地理显示配准，不代表持续定位融合。
 
+LIO观察记忆、无GPS候选规划及受限道路接入：见 [observed_navigation.md](docs/observed_navigation.md)。不代表自动探索/真机导航已经接通。
+
 面向 NVIDIA AGX Orin / Ubuntu 22.04 / ROS 2 Humble：复用 FAST-LIVO2 的雷达＋IMU里程计，接入 LC29H GPS，并在 OSM 道路网络上全局选路、利用雷达进行局部避障。
 
 **当前是分模块部署与验证版本，不是已经完成真机自主导航的交付版本。**

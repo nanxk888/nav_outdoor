@@ -7,9 +7,9 @@ No new ROS publishers, robot commands or localization initialization calls are m
 1. Outdoors, wait for valid GPS and fresh LIO/filtered cloud data; stop the robot.
 2. Open Parameters and status -> initial direction / geographic alignment.
 3. Enter the robot nose bearing: true north 0 degrees, east 90, clockwise positive.
-4. Enter measured IMU +X bearing offset clockwise from the nose, and the GPS antenna
-   position relative to IMU in IMU X/Y/Z axes, metres. Zero defaults mean approximate
-   co-location/alignment, not verified extrinsics. Realsense is not involved.
+4. GPS and IMU are currently treated as co-located and aligned per operator request;
+   no mounting parameter entry is required. This is an approximation, not verified
+   extrinsics. Realsense is not involved.
 5. Click the stationary alignment button. Geographic view becomes the main view:
    green = raw GPS antenna, cyan = geographically registered IMU/LIO position and
    track, orange = filtered obstacle points. Antenna and IMU dots need not coincide.
