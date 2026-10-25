@@ -39,6 +39,7 @@ log/
 !/scripts/test_stable_planner.py
 !/scripts/navigation_web.py
 !/scripts/launch_real_workspace.sh
+!/scripts/workspace_startup_check.py
 !/scripts/ensure_real_gnss_driver.py
 !/scripts/test_gnss_driver_guard.py
 !/scripts/navigation_control.py
@@ -63,6 +64,7 @@ log/
 !/docs/navigation_web.md
 !/docs/robot_control.md
 !/docs/real_navigation_cloud.md
+!/docs/workspace_startup.md
 !/map/robot_control.example.json
 !/map/gnss_bridge.yaml
 !/web/

@@ -7,7 +7,8 @@ from launch import LaunchDescription
 from launch.actions import (DeclareLaunchArgument, ExecuteProcess,
                             OpaqueFunction, RegisterEventHandler, EmitEvent, SetEnvironmentVariable,
                             UnsetEnvironmentVariable)
-from launch.event_handlers import OnProcessExit
+from launch.event_handlers import OnProcessExit, OnProcessStart
+from launch.actions import LogInfo
 from launch.events import Shutdown
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -33,6 +34,17 @@ def configure(context):
              UnsetEnvironmentVariable('FASTDDS_DEFAULT_PROFILES_FILE'),
              UnsetEnvironmentVariable('ROS_DISCOVERY_SERVER')]
     critical=[]
+    nav_enabled=enabled('with_nav')
+    if nav_enabled:
+        import json
+        profile=Path(arg('nav_profile')).expanduser()
+        if not profile.is_absolute() or not profile.is_file():
+            raise RuntimeError('with_nav requires nav_profile:=/absolute/path/to/reviewed_profile.json')
+        p=json.loads(profile.read_text(encoding='utf-8'))
+        if p.get('survey_confirmed') is not True or not p.get('approved_way_ids'):
+            raise RuntimeError('Nav profile must confirm survey and approved_way_ids; example profile is not deployable')
+        if not Path(p.get('osm_file','')).is_absolute() or not Path(p['osm_file']).is_file():
+            raise RuntimeError('Nav profile osm_file must exist at an absolute path')
     if enabled('with_gps_driver'):
         guard=ExecuteProcess(cmd=[sys.executable,str(root/'scripts/ensure_real_gnss_driver.py'),
             '--root',arg('gps_driver_root'),'--config',arg('gps_driver_config'),
@@ -69,11 +81,23 @@ def configure(context):
                            additional_env={'NXK_CONTROL_CONFIG':arg('control_config'),
                                            'NXK_LOG_LEVEL':arg('log_level')},name='navigation_web')
         critical.append(web)
+    if nav_enabled:
+        critical.append(ExecuteProcess(cmd=['ros2','launch','d1h_nav2','real_osm_navigation.launch.py',
+            'profile:='+str(profile)],output='screen',name='nav_navigation'))
     # Register before spawning; fail the bringup if any owned top-level process exits.
+    def started(event, _context):
+        return [LogInfo(msg='[STARTED] '+event.process_name+' process started; data readiness checked separately')]
     for process in critical:
+        actions.append(RegisterEventHandler(OnProcessStart(target_action=process,on_start=started)))
         actions.append(RegisterEventHandler(OnProcessExit(target_action=process,on_exit=[
             EmitEvent(event=Shutdown(reason='A workspace process exited; no automatic restart'))])))
     actions.extend(critical)
+    checks=[]
+    for flag,label in [('with_lio','lio'),('with_gps_bridge','gps'),('with_gnss_gate','gate'),
+                       ('with_nav_cloud','cloud'),('with_web','web'),('with_nav','nav')]:
+        if enabled(flag):checks.append(label)
+    actions.append(ExecuteProcess(cmd=[sys.executable,str(root/'scripts/workspace_startup_check.py'),
+        '--checks',','.join(checks)],output='screen',name='startup_readiness'))
     return actions
 
 
@@ -88,8 +112,10 @@ def generate_launch_description():
         DeclareLaunchArgument('gps_driver_config',default_value='/workspace/d1h-autonomy-final/.local/robot/perception/gnss.yaml'),
         DeclareLaunchArgument('with_gps_bridge',default_value='true'),
         DeclareLaunchArgument('with_lio',default_value='true'),
-        DeclareLaunchArgument('with_nav_cloud',default_value='false'),
-        DeclareLaunchArgument('sensor_height_m',default_value='0.0',description='Measured standing Livox IMU height above local ground, metres'),
+        DeclareLaunchArgument('with_nav_cloud',default_value='true'),
+        DeclareLaunchArgument('sensor_height_m',default_value='0.46',description='Measured INITIAL Livox IMU height; override if not in verified low stance'),
+        DeclareLaunchArgument('with_nav',default_value='false'),
+        DeclareLaunchArgument('nav_profile',default_value='',description='Reviewed OSM profile required when with_nav:=true'),
         DeclareLaunchArgument('with_gnss_gate',default_value='true'),
         DeclareLaunchArgument('with_web',default_value='true'),
         DeclareLaunchArgument('gps_cyclonedds_xml',default_value='/workspace/d1h-autonomy-final/.local/robot/perception/cyclonedds.xml'),

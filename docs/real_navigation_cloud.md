@@ -30,7 +30,7 @@ bash scripts/build_real_outdoor.sh
 source install/local_setup.bash
 ```
 
-先停止旧的统一工作空间启动程序（不要并行启动第二份LIO）。新的统一入口默认仍不开启过滤器；已取得实测高度后，使用以下参数启动，替换文字占位值：
+先停止旧的统一工作空间启动程序（不要并行启动第二份LIO）。统一入口现默认开启过滤器并传入低位实测高度0.46米；若初始化姿态不同，必须覆盖此高度。过滤节点自身默认0仍拒绝生成有效点云。使用以下参数启动，替换文字占位值：
 
 ```bash
 bash scripts/launch_real_workspace.sh \
