@@ -50,7 +50,9 @@ Livox hardware driver remains externally managed; do not start a duplicate drive
 LIO observation memory and candidate-only planning now also start by default
 (`with_memory:=false` disables them). See [observed_navigation.md](observed_navigation.md).
 
-To include the existing Nav2/OSM planning launch in this same command:
+Nav2/OSM planning is now selected by default and waits for GPS/manual-heading
+registration. See [navigation_execution.md](navigation_execution.md). To override
+the automatically selected project OSM/datum profile:
 
 ```bash
 bash scripts/launch_real_workspace.sh \
@@ -62,9 +64,9 @@ bash scripts/launch_real_workspace.sh \
 
 Configure an existing absolute Orin OSM path, numeric datum and road corridor width.
 No survey/approval booleans or mandatory road-ID list are required. Supported roads
-are extracted automatically when no list is provided. Nav2 remains opt-in: it still
-needs actual localization, body transforms and live execution-state inputs, which
-are not created just by loading this profile.
+are extracted automatically when no list is provided. The new sensor-derived
+virtual navigation reference supplies timestamped transforms and live readiness;
+loading a profile alone does not register the robot on the geographic map.
 
 Each owned process emits one `[STARTED]` record. A separate 45-second observer emits
 one `[READY]` or `[NOT READY]` record per selected subsystem: LIO tracking, GPS receipt,

@@ -90,10 +90,10 @@ Only the verified narrow connector is temporarily opened in the road prior; all 
 off-road area stays blocked. Access is withdrawn when the connector evidence becomes
 stale/blocked. Existing global obstacle memory still participates in road routing.
 
-Actual road navigation still needs reviewed profile, valid `map -> odom -> base_link`
-and native-LIO-to-map transforms, local planner/controller, correct footprint and the
-existing safety status producer. Browser-only alignment is NOT this TF. This change
-does not complete those remaining dependencies or enable navigation automatically.
+Actual road execution now uses sensor-derived `map -> odom -> navigation_base`
+and native-LIO transforms after explicit GPS/manual-heading registration. See
+[navigation_execution.md](navigation_execution.md) for operation and limitations.
+Browser-only alignment is not a substitute for the live ROS registration status.
 
 ## Reset and staged exploration are different from a full connector
 

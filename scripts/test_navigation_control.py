@@ -127,6 +127,28 @@ class ControlTests(unittest.TestCase):
         c.safety={'navigation_ready':True,'base_link_ready':True,'map_alignment_verified':True,'stamp':99.9}
         self.assertTrue(c.safe());c.safety['stamp']=90;self.assertFalse(c.safe())
 
+    def test_virtual_reference_readiness_is_explicit(self):
+        c=self.instance();c.safety_time=time.monotonic()
+        c.safety={'navigation_ready':True,'navigation_base_ready':True,'base_link_ready':False,'map_alignment_verified':True,'stamp':99.9}
+        self.assertTrue(c.safe());c.safety['navigation_base_ready']=False;self.assertFalse(c.safe())
+
+    def test_changed_registration_cancels_active_navigation(self):
+        c=self.instance('NAVIGATING');c.safety={'reference_epoch':'old'}
+        c.on_safety(types.SimpleNamespace(data='{"reference_epoch":"new"}'))
+        self.assertEqual(c.phase,'STOPPED')
+
+    def test_navigation_attach_does_not_stand_if_loco_is_lost(self):
+        c=self.instance('ARMING');c.deferred_goal={'latitude':0.,'longitude':0.}
+        c.robot.update(fsm='idle');c.tick()
+        self.assertEqual(c.phase,'STOPPED');self.assertEqual(c.sent[-1][0],('stop',))
+
+    def test_navigation_attach_only_arms_existing_manual_loco(self):
+        c=self.instance('IDLE');c.nav=types.SimpleNamespace(server_is_ready=lambda:True)
+        c.robot.update(sdk_enabled=True,interfaces_fresh=True,biped=True)
+        c.safety_time=time.monotonic();c.safety={'navigation_ready':True,'navigation_base_ready':True,'map_alignment_verified':True,'stamp':99.9}
+        c.start_goal({'latitude':0.,'longitude':0.});self.assertEqual(c.phase,'ARMING')
+        c.tick();self.assertEqual(c.sent[-1][0],('arm',))
+
     def test_no_auto_resume(self):
         c=self.instance('STOPPED');c.tick();self.assertEqual(c.phase,'STOPPED')
         self.assertEqual(c.sent[-1][0],('hello',))

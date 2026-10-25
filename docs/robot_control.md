@@ -162,7 +162,7 @@ cd /workspace/nxk
 bash scripts/launch_real_workspace.sh control_config:=/root/.config/nxk/control.json
 ```
 
-不传control_config时仍是默认只读。点击起立：握手→单次transform_up→本次新反馈→STAND_READY。操作员现场确认站稳后，另点loco：单次loco→本次新反馈→READY零速度待命。STAND_READY和READY均可确认停稳后落下（单次transform_down）；仅READY可设置姿态/导航。导航中禁止姿态与落下。网页排队成功不代表物理动作成功。
+不传control_config时仍是默认只读。点击起立：握手→单次transform_up→本次新反馈→STAND_READY。操作员现场确认站稳后，另点loco：单次loco→本次新反馈→READY零速度待命。开始导航也可以从IDLE/STOPPED接管人工已选择的loco，握手后自动提交目标，不自动起立或切模式。导航中禁止姿态与落下。网页排队成功不代表物理动作成功。
 
 重新点击起立时，若握手后已是transform_up，不重复请求起立，直接进入STAND_READY等待人工点击loco；若已在loco则只接管零速度待命。处于transform_down或其他未支持状态时拒绝起立，不打断落下。模式超时后停止会话，不自动重试，重新操作前先检查实机状态。
 
@@ -170,7 +170,7 @@ FSM每次事件变化有0.3秒历史整理窗口；Python在不超过0.5秒、�
 
 ## 尚未完成的导航与安全前提
 
-当前 GPS-LIO 融合、本体外参、真实地面过滤和完整独立安全监督尚未全部接通。非零导航速度要求 `/real_navigation/safety_status` 来自真实监督器，检查定位、TF、障碍输入和道路配置，不能手工发布 true 绕过。前进上限0.3m/s、转向0.5rad/s，当前禁止倒车，不采用未经实测的2m/s。
+新加入的真实输入参考节点发布 `/real_navigation/safety_status`：GPS/人工航向初始锚定、虚拟水平IMU导航坐标、LIO/地面/观察记忆的新鲜度。它不是持续GPS融合或完整独立硬件安全系统，不能手工发布 true 绕过。详见 [navigation_execution.md](navigation_execution.md)。前进上限0.3m/s、转向0.5rad/s，当前禁止倒车，不采用未经实测的2m/s。
 
 接收器200ms无新有效指令、SDK关闭或FSM过期即发零速度、撤销会话；不会自动恢复。模式切换、浏览器心跳、导航输入也有超时。软件零速度不是急停；接收器崩溃或断电时其看门狗同样失效，必须验证厂家控制器自身超时停车与独立硬件急停。落下前的零指令和人工确认不能替代实测速度传感器。
 

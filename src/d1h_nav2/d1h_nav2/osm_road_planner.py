@@ -24,6 +24,11 @@ class OsmRoadPlanner(Node):
     def __init__(self):
         super().__init__('osm_road_planner')
         self.declare_parameter('profile', '')
+        self.declare_parameter('robot_frame','base_link')
+        self.declare_parameter('access_half_width_m',.5)
+        self.robot_frame=self.get_parameter('robot_frame').value
+        self.access_width=float(self.get_parameter('access_half_width_m').value)
+        if not .5<=self.access_width<=2:raise ValueError('Invalid connector half width')
         with open(self.get_parameter('profile').value, encoding='utf-8') as f:
             profile=json.load(f)
         self.roads=RoadGraph(profile['osm_file'],profile['datum_latitude_deg'],
@@ -102,7 +107,7 @@ class OsmRoadPlanner(Node):
             # Conservative circular footprint stencil; every tested cell must be observed free.
             res=grid.info.resolution
             if not .1<=res<=1 or len(grid.data)!=grid.info.width*grid.info.height:return False
-            radius=.5+res*.71;n=math.ceil(radius/res)
+            radius=self.access_width+res*.71;n=math.ceil(radius/res)
             for x in range(-n,n+1):
                 for y in range(-n,n+1):
                     if math.hypot(x,y)*res>radius:continue
@@ -120,11 +125,12 @@ class OsmRoadPlanner(Node):
         if not self.observed_connector(a,b):raise ValueError('Access evidence expired before path publication')
         msg=copy.deepcopy(self.grid);r=msg.info.resolution;w,h=msg.info.width,msg.info.height
         ox,oy=msg.info.origin.position.x,msg.info.origin.position.y
+        half=self.access_width
         for px,py in sample(a,b,r/3):
-            for ix in range(math.floor((px-.5-ox)/r),math.ceil((px+.5-ox)/r)+1):
-                for iy in range(math.floor((py-.5-oy)/r),math.ceil((py+.5-oy)/r)+1):
+            for ix in range(math.floor((px-half-ox)/r),math.ceil((px+half-ox)/r)+1):
+                for iy in range(math.floor((py-half-oy)/r),math.ceil((py+half-oy)/r)+1):
                     x,y=ox+(ix+.5)*r,oy+(iy+.5)*r
-                    if 0<=ix<w and 0<=iy<h and math.hypot(x-px,y-py)<=.5:msg.data[iy*w+ix]=0
+                    if 0<=ix<w and 0<=iy<h and math.hypot(x-px,y-py)<=half:msg.data[iy*w+ix]=0
         self.access_segment=(a,b);msg.header.stamp=self.get_clock().now().to_msg();self.pub.publish(msg)
 
     def snapshot(self):
@@ -150,7 +156,7 @@ class OsmRoadPlanner(Node):
             if request.use_start:
                 if request.start.header.frame_id!='map':raise ValueError('Start must use map frame')
                 p=request.start.pose.position
-            else:p=self.tf.lookup_transform('map','base_link',Time()).transform.translation
+            else:p=self.tf.lookup_transform('map',self.robot_frame,Time()).transform.translation
             grid=self.snapshot();q=request.goal.pose.position
             points=self.roads.route((p.x,p.y),(q.x,q.y),lambda a,b:self.clear(grid,a,b),
                                     offroad_start_limit=self.offroad_limit,connector_clear=self.observed_connector)
@@ -173,7 +179,7 @@ class OsmRoadPlanner(Node):
         response.is_valid=False
         try:
             if request.path.header.frame_id!='map' or not request.path.poses:return response
-            grid=self.snapshot();p=self.tf.lookup_transform('map','base_link',Time()).transform.translation
+            grid=self.snapshot();p=self.tf.lookup_transform('map',self.robot_frame,Time()).transform.translation
             pts=[(s.pose.position.x,s.pose.position.y) for s in request.path.poses]
             i=min(range(len(pts)),key=lambda i:math.dist(pts[i],(p.x,p.y)))
             pts=pts[i:]

@@ -24,6 +24,7 @@ operator_settings = {}
 control = None
 memory_goal_pub = None
 memory_reset_pub = None
+registration_pub = None
 last_cloud_receive=-100.
 lio_epoch=uuid.uuid4().hex
 previous_lio=None
@@ -120,7 +121,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(403)
             return
         is_control = self.path.startswith('/api/control/')
-        if self.path not in ('/api/operator/goal', '/api/operator/heading','/api/operator/lio_goal','/api/operator/memory_reset') and not is_control:
+        if self.path not in ('/api/operator/goal', '/api/operator/heading','/api/operator/lio_goal','/api/operator/memory_reset','/api/operator/register') and not is_control:
             self.send_error(404)
             return
         try:
@@ -128,6 +129,16 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < size <= 1024:
                 raise ValueError('invalid body length')
             value = json.loads(self.rfile.read(size))
+            if self.path=='/api/operator/register':
+                if set(value)!={'heading_deg'} or type(value['heading_deg']) not in (int,float) or not math.isfinite(value['heading_deg']) or not 0<=value['heading_deg']<360:
+                    raise ValueError('Invalid bearing')
+                with lock:g=samples.get('gps');o=samples.get('lio')
+                if not g or not o or not g['value']['valid'] or registration_pub is None or any(time.monotonic()-s['received_monotonic']>1 for s in (g,o)):
+                    raise ValueError('Fresh GPS/LIO required for registration')
+                registration_pub.publish(String(data=json.dumps(dict(heading_deg=value['heading_deg'],lio_stamp=o['value']['stamp'],gps_stamp=g['value']['stamp'],request_time=time.time()))))
+                body=json.dumps({'queued':True,'reason':'Registration requested; inspect live reference status for acceptance'}).encode()
+                self.send_response(202);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)))
+                self.end_headers();self.wfile.write(body);return
             if self.path=='/api/operator/memory_reset':
                 if value!={}:raise ValueError('Reset body must be empty')
                 with lock:record=samples.get('memory')
@@ -228,7 +239,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global osm_data, control, memory_goal_pub, memory_reset_pub
+    global osm_data, control, memory_goal_pub, memory_reset_pub, registration_pub
     osm_data = load_osm()
     rclpy.init()
     node = rclpy.create_node('navigation_web_readonly')
@@ -236,16 +247,20 @@ def main():
     control = Control(node)
     memory_goal_pub=node.create_publisher(String,'/navigation/memory/goal_candidate',1)
     memory_reset_pub=node.create_publisher(String,'/navigation/memory/reset',1)
+    registration_pub=node.create_publisher(String,'/navigation/reference/register',1)
     subs = [node.create_subscription(NavSatFix, '/hardware/gnss/fix', fix, qos_profile_sensor_data),
             node.create_subscription(PointCloud2,'/livox/lidar/pointcloud_nav',cloud,qos_profile_sensor_data),
             node.create_subscription(Odometry, '/navigation/lio/odometry', odom, qos_profile_sensor_data)]
     for topic, key in [('/localization/gnss/status', 'gps_status'),
                        ('/navigation/lio/status', 'lio_status'),
-                       ('/navigation/cloud_filter/status','cloud_status'),('/navigation/memory/status','memory')]:
+                       ('/navigation/cloud_filter/status','cloud_status'),('/navigation/memory/status','memory'),
+                       ('/real_navigation/safety_status','reference')]:
         subs.append(node.create_subscription(String, topic, lambda m, k=key: save(k, m.data), 10))
     subs.append(node.create_subscription(RosPath, '/plan', lambda m: save('plan', {
         'frame': m.header.frame_id, 'points': [[p.pose.position.x, p.pose.position.y]
         for p in m.poses[::max(1, len(m.poses)//1000)]]}), 1))
+    subs.append(node.create_subscription(RosPath,'/navigation/display_plan',lambda m:save('plan',{
+        'frame':m.header.frame_id,'points':[[p.pose.position.x,p.pose.position.y] for p in m.poses[::max(1,len(m.poses)//1000)]]}),1))
     server = ThreadingHTTPServer(('127.0.0.1', 8765), Handler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, daemon=True).start()

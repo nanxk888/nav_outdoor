@@ -1,8 +1,9 @@
 # OSM / GPS / LIO unified display
 
-This is explicit geographic registration for visualization, **not a GPS/LIO EKF**,
-not a navigation TF publisher and not a way to bypass navigation safety checks.
-No new ROS publishers, robot commands or localization initialization calls are made.
+The browser layer is explicit geographic registration for visualization, **not a
+GPS/LIO EKF**. The alignment button now ALSO queues a source-timestamped registration
+request to the real ROS navigation reference. Acceptance is shown separately in live
+reference status. This does not start motion. See [navigation_execution.md](navigation_execution.md).
 
 1. Outdoors, wait for valid GPS and fresh LIO/filtered cloud data; stop the robot.
 2. Open Parameters and status -> initial direction / geographic alignment.
@@ -14,7 +15,8 @@ No new ROS publishers, robot commands or localization initialization calls are m
    green = raw GPS antenna, cyan = geographically registered IMU/LIO position and
    track, orange = filtered obstacle points. Antenna and IMU dots need not coincide.
 6. Pan/zoom normally, use geographic follow to re-enable following after panning.
-   Clear alignment or refresh to discard it. Each browser tab has its own alignment.
+   Clear alignment or refresh to discard the browser overlay. This does not cancel
+   navigation or clear the ROS reference; each browser tab has its own overlay.
 
 Latest source timestamps must differ by <=0.3 s and inputs must be fresh. The click
 asserts the robot is physically stationary: this is not an automatic standstill detector

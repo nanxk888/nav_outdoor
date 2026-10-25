@@ -42,6 +42,10 @@ log/
 !/scripts/navigation_web.py
 !/scripts/launch_real_workspace.sh
 !/scripts/workspace_startup_check.py
+!/scripts/start_navigation_when_ready.py
+!/scripts/test_navigation_reference.py
+!/scripts/test_navigation_reference_ros.py
+!/scripts/test_real_navigation_execution_ros.py
 !/scripts/test_workspace_exit.py
 !/scripts/stop_real_workspace.py
 !/scripts/stop_real_workspace.sh
@@ -74,6 +78,7 @@ log/
 !/docs/workspace_startup.md
 !/docs/geographic_overlay.md
 !/docs/observed_navigation.md
+!/docs/navigation_execution.md
 !/map/robot_control.example.json
 !/map/gnss_bridge.yaml
 !/web/

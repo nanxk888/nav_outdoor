@@ -19,7 +19,7 @@ class ObstacleMemoryNode(Node):
         super().__init__('obstacle_memory')
         defaults = dict(remember_all_obstacles=True, stable_sec=0., retention_sec=300., resolution_m=.25,
                         max_gap_sec=.6, motion_tolerance_m=.15, max_tracks=256,
-                        max_cells=100000, max_range_m=5., max_scan_age_sec=.5)
+                        max_cells=100000, max_range_m=5., max_scan_age_sec=.5,sensor_frame='lidar_link')
         for name, value in defaults.items():
             self.declare_parameter(name, value)
         p = lambda name: self.get_parameter(name).value
@@ -73,7 +73,7 @@ class ObstacleMemoryNode(Node):
             return  # Replayed/duplicate scans must never earn stationary time.
         try:
             tf = self.buffer.lookup_transform('map', msg.header.frame_id, stamp)
-            sensor = self.buffer.lookup_transform('map', 'lidar_link', stamp)
+            sensor = self.buffer.lookup_transform('map', self.get_parameter('sensor_frame').value, stamp)
         except TransformException:
             return  # Missing transforms cannot qualify an observation.
         fields = {f.name: f for f in msg.fields}

@@ -33,6 +33,8 @@ def remaining_length(path, x, y):
 class StablePlanner(Node):
     def __init__(self):
         super().__init__('stable_planner')
+        self.declare_parameter('robot_frame','base_link')
+        self.robot_frame=self.get_parameter('robot_frame').value
         for name, default in dict(global_period_sec=1., local_period_sec=.2,
                                   local_refresh_remaining_m=3.5,
                                   local_goal_shift_m=.03, max_path_deviation_m=.5,
@@ -90,7 +92,7 @@ class StablePlanner(Node):
         if self._local_source is None:
             return None
         try:
-            tf = self.buffer.lookup_transform(self._local_source.header.frame_id, 'base_link', Time())
+            tf = self.buffer.lookup_transform(self._local_source.header.frame_id, self.robot_frame, Time())
         except TransformException:
             return None
         pos = tf.transform.translation
@@ -131,7 +133,7 @@ class StablePlanner(Node):
         """Front buffer stays executable while the next request retries back buffer."""
         now = self.get_clock().now().nanoseconds/1e9
         try:
-            p = self.buffer.lookup_transform('map', 'base_link', Time()).transform.translation
+            p = self.buffer.lookup_transform('map', self.robot_frame, Time()).transform.translation
             xy = (p.x, p.y)
             if self._handover_anchor is None or math.dist(xy, self._handover_anchor) >= .2:
                 self._handover_anchor, self._handover_since = xy, now
@@ -218,7 +220,7 @@ class StablePlanner(Node):
         if abs(math.atan2(math.sin(angle), math.cos(angle))) > .35:
             return True
         try:
-            tf = self.buffer.lookup_transform(cached['result'].path.header.frame_id, 'base_link', Time())
+            tf = self.buffer.lookup_transform(cached['result'].path.header.frame_id, self.robot_frame, Time())
         except TransformException:
             return True
         pos = tf.transform.translation
@@ -242,7 +244,7 @@ class StablePlanner(Node):
         if not path.poses:
             return
         try:
-            p = self.buffer.lookup_transform(path.header.frame_id, 'base_link', Time()).transform.translation
+            p = self.buffer.lookup_transform(path.header.frame_id, self.robot_frame, Time()).transform.translation
             i = min(range(len(path.poses)), key=lambda i: math.hypot(
                 path.poses[i].pose.position.x-p.x, path.poses[i].pose.position.y-p.y))
             path.poses = path.poses[i:]
@@ -323,7 +325,7 @@ class StablePlanner(Node):
             # Commit only after collision validation; do not clear front buffer
             # first, and never blend across an unchecked obstacle shortcut.
             try:
-                tf = self.buffer.lookup_transform(response.result.path.header.frame_id, 'base_link', Time())
+                tf = self.buffer.lookup_transform(response.result.path.header.frame_id, self.robot_frame, Time())
                 p = tf.transform.translation
                 sampled, deviation = prune_and_sample(response.result.path, p.x, p.y)
                 candidate_ok = deviation <= self.p('max_path_deviation_m') and await self.validate('local', sampled)

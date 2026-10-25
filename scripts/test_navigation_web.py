@@ -124,6 +124,23 @@ class WebTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as c:self.post('/api/operator/heading',{'heading_deg':0},False)
         self.assertEqual(c.exception.code,403)
 
+    def test_reference_registration_queued_not_accepted(self):
+        old_pub=self.m.registration_pub;old_string=self.m.String;received=[]
+        self.m.registration_pub=types.SimpleNamespace(publish=lambda msg:received.append(json.loads(msg.data)))
+        self.m.String=lambda **kw:types.SimpleNamespace(**kw)
+        try:
+            self.m.save('gps',{'valid':True,'stamp':100.1})
+            self.m.save('lio',{'stamp':100.2})
+            with self.post('/api/operator/register',{'heading_deg':90}) as response:
+                self.assertEqual(response.status,202);self.assertTrue(json.load(response)['queued'])
+            self.assertEqual(received[0]['lio_stamp'],100.2)
+            self.assertEqual(received[0]['gps_stamp'],100.1)
+            with self.assertRaises(HTTPError):self.post('/api/operator/register',{'heading_deg':360})
+            self.m.save('gps',{'valid':False,'stamp':100.1})
+            with self.assertRaises(HTTPError):self.post('/api/operator/register',{'heading_deg':90})
+            self.assertEqual(len(received),1)
+        finally:self.m.registration_pub=old_pub;self.m.String=old_string
+
     def test_no_control_token(self):
         with patch.dict('os.environ',{},clear=True):
             with self.assertRaises(HTTPError) as c:self.post('/api/control/start',{})

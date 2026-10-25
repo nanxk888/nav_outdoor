@@ -54,15 +54,20 @@ class Control:
 
     def on_safety(self, msg):
         try:
-            self.safety = json.loads(msg.data); self.safety_time = time.monotonic()
-        except ValueError: self.safety = {}
+            value=json.loads(msg.data)
+            if not isinstance(value,dict):raise ValueError('Expected status object')
+            previous=self.safety.get('reference_epoch')
+            self.safety=value;self.safety_time=time.monotonic()
+            if previous is not None and previous!=value.get('reference_epoch') and self.phase in ('GOAL_PENDING','NAVIGATING'):
+                self.stop('Navigation reference changed; start a new goal explicitly')
+        except (ValueError,TypeError): self.safety = {}
 
     def safe(self):
         # Must be supplied by a REAL independent localization/perception supervisor.
         # Existing LIO_SENSOR_TRACKING / GNSS_READY alone are insufficient.
         s = self.safety
         return (time.monotonic()-self.safety_time < .5 and s.get('navigation_ready') is True
-                and s.get('base_link_ready') is True and s.get('map_alignment_verified') is True
+                and (s.get('navigation_base_ready') is True or s.get('base_link_ready') is True) and s.get('map_alignment_verified') is True
                 and type(s.get('stamp')) in (int,float)
                 and -.05 <= self.node.get_clock().now().nanoseconds/1e9-s['stamp'] < .5)
 
@@ -77,6 +82,7 @@ class Control:
         self.operation = secrets.token_hex(8)
 
     def stop(self, reason):
+        self.deferred_goal=None
         self.generation += 1; self.pending = False
         self.cmd = (0., 0.); self.cmd_time = 0.
         if self.goal_handle:
@@ -94,10 +100,18 @@ class Control:
         self.sock.sendto(encode(data, self.key), self.target)
 
     def start_goal(self, value):
+        if self.phase in ('IDLE','STOPPED'):
+            if time.monotonic()-self.robot_time>.3 or self.robot.get('fsm')!='loco' or not all(self.robot.get(k) for k in ('authorized','sdk_enabled','fsm_fresh','interfaces_fresh','biped')):
+                raise ValueError('Navigation requires current SDK/loco feedback; robot modes remain manual')
+            if not self.safe() or not self.nav.server_is_ready():raise ValueError('Navigation reference or Nav2 is not ready')
+            self.deferred_goal=dict(value);self.browser=time.monotonic();self.session=secrets.token_hex(16)
+            self.transition('ARMING','Attach to operator-selected loco for navigation');return
         if self.phase != 'READY':raise ValueError('Navigation chain incomplete: robot must be attached in loco READY')
         if not self.nav.server_is_ready():raise ValueError('Navigation chain incomplete: Nav2 action server is not running')
         if not self.safe():raise ValueError('Navigation chain incomplete: live body/map localization and perception status is missing/stale; this is not road approval')
-        c = self.config; lat, lon = value['latitude'], value['longitude']
+        c = dict(self.config); lat, lon = value['latitude'], value['longitude']
+        if self.safety.get('reference_frame')=='navigation_base':
+            for k in ('datum_latitude_deg','datum_longitude_deg'):c[k]=self.safety.get(k)
         if any(type(c.get(k)) not in (int,float) or not math.isfinite(c[k]) for k in ('datum_latitude_deg','datum_longitude_deg')):
             raise ValueError('Map datum coordinates missing/invalid; this is coordinate configuration, not approval')
         if not -90<=c['datum_latitude_deg']<=90 or not -180<=c['datum_longitude_deg']<=180:
@@ -192,9 +206,16 @@ class Control:
             if active and self.phase != 'ARMING' and (self.robot.get('fault') or not self.robot.get('fsm_fresh')):
                 self.stop('Receiver fault / stale FSM'); active = False
             if self.phase == 'ARMING':
+                if getattr(self,'deferred_goal',None) is not None and self.robot.get('fsm')!='loco':
+                    self.stop('Manual loco state lost while attaching navigation');return
                 self.send('arm')
                 if self.robot.get('active') and not self.robot.get('fault') and self.robot.get('session') == self.session:
-                    if self.robot.get('fsm')=='loco':self.transition('READY','Attached to existing loco at zero speed')
+                    if self.robot.get('fsm')=='loco':
+                        self.transition('READY','Attached to existing loco at zero speed')
+                        goal=getattr(self,'deferred_goal',None);self.deferred_goal=None
+                        if goal is not None:
+                            try:self.start_goal(goal)
+                            except ValueError as exc:self.stop(str(exc))
                     elif self.robot.get('fsm')=='transform_up':
                         self.transition('STAND_READY','Already transform_up; waiting for separate loco button')
                     else:self.transition('STANDING','Request transform_up')

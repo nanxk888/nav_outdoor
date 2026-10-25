@@ -44,7 +44,8 @@ async function click(x,y){$('osm').handlers.pointerdown(event(x,y));await $('osm
  scan.cloud_status.value=JSON.stringify({ready:true});
  context.NavMaps.update({samples:scan},true);
  for(const id of ['imuHeadingOffset','antennaX','antennaY','antennaZ'])$(id).value='0';
- $('headingValue').value='90';$('alignGeo').onclick();
+ $('headingValue').value='90';await $('alignGeo').onclick();
+ assert.equal(posts.at(-1)[0],'/api/operator/register');assert.equal(posts.at(-1)[1].heading_deg,90);
  assert($('gpsView').flags.has('is-main'));assert($('alignmentState').textContent.includes('已地理配准'));
  const draws=obstacleDraws;context.NavMaps.draw();assert(obstacleDraws>=draws+2,'both geographic and local view draw the same cloud');
  scan.gps.value.valid=false;context.NavMaps.update({samples:scan},true);

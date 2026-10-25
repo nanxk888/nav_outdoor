@@ -1,4 +1,4 @@
-/* Offline OSM with explicit, display-only geographic alignment. */
+/* Offline OSM overlay plus explicit source-stamped ROS reference registration. */
 (() => {
  const {Camera,project,unproject}=NavViewport;
  const $=id=>document.getElementById(id);
@@ -8,6 +8,7 @@
  let active='lio',mode='pan',goal=null,heading=null,follow=true,trajectory=[],lastStamp=null;
  let alignment=null,lastEpoch=null,lastFrame=null,geoFollow=true;
  let memory=null;
+ let reference=null,navPlan=null;
  function memoryReady(){return goodLio()&&memory&&age(memory)<1.5&&memory.value?.ready&&memory.value.frame===lio.value.frame&&Math.abs(memory.value.source_stamp-lio.value.stamp)<1}
  function drawMemory(ctx,camera,convert){
   if(!memoryReady())return;
@@ -40,6 +41,11 @@
   if(bounds&&!camera.fitted){camera.fit(bounds);camera.fitted=true}
   if(geoReady()&&geoFollow){const p=alignment.point(lio.value.position);camera.x=p[0];camera.y=p[1]}
   for(const f of features){ctx.lineWidth=f.road?1.6:1;ctx.strokeStyle=f.road?'#91b9c4':'#345463';ctx.beginPath();f.points.forEach((p,i)=>{const v=camera.screen(p);i?ctx.lineTo(...v):ctx.moveTo(...v)});ctx.stroke()}
+  if(online&&reference?.value?.registered&&age(reference)<1&&navPlan?.value?.frame==='map'&&age(navPlan)<2){
+   const r=reference.value;ctx.strokeStyle='#80baff';ctx.lineWidth=3;ctx.beginPath();
+   navPlan.value.points.forEach(([x,y],i)=>{const lon=r.datum_longitude_deg+x/(6378137*Math.cos(r.datum_latitude_deg*Math.PI/180))*180/Math.PI,lat=r.datum_latitude_deg+y/6378137*180/Math.PI,p=camera.screen(project(lon,lat));i?ctx.lineTo(...p):ctx.moveTo(...p)});ctx.stroke();
+  }
+  $('referenceHint').textContent=reference&&age(reference)<1?`导航坐标：${reference.value.registered?'已登记初始GPS/方向':'待初始登记'} · ${reference.value.reason} · ${reference.value.navigation_ready?'输入就绪，Nav2状态见控制栏':'等待实时输入'}`:'导航坐标节点尚未收到';
   if(goal){const p=camera.screen(project(...goal));ctx.strokeStyle='#ffcb79';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(...p,5,0,Math.PI*2);ctx.moveTo(p[0]-9,p[1]);ctx.lineTo(p[0]+9,p[1]);ctx.moveTo(p[0],p[1]-9);ctx.lineTo(p[0],p[1]+9);ctx.stroke();if(active==='gps'){ctx.fillStyle='#ffcb79';ctx.font='12px system-ui';ctx.fillText('目标预览',p[0]+12,p[1]-10)}}
   if(goodGps())marker(ctx,camera.screen(project(gps.value.longitude,gps.value.latitude)),'#79ed96',6);
   if(geoReady()){
@@ -111,7 +117,7 @@
  $('pickHeading').onclick=()=>{show('gps');setMode('heading');notify('从机头位置向前拖拽，设置初始方向预览（不是位置初始化）')};
  $('saveHeading').onclick=async()=>{const raw=$('headingValue').value,v=Number(raw);if(!raw.trim()||!Number.isFinite(v)||v<0||v>=360){notify('方向请输入0到小于360的角度','error');return}if(await submit('heading',{heading_deg:v})){heading=v;$('headingSummary').textContent=`方向预览 ${v.toFixed(1)}°`}};
  $('zoomIn').onclick=()=>{cameras[active].zoom(1.4);draw()};$('zoomOut').onclick=()=>{cameras[active].zoom(1/1.4);draw()};
- $('alignGeo').onclick=()=>{try{
+ $('alignGeo').onclick=async()=>{try{
   if(!goodGps()||!goodLio())throw Error('需要新鲜有效GPS和LIO，当前不能对齐');
   const ga=Date.now()/1000-gps.value.stamp,la=Date.now()/1000-lio.value.stamp;
   if(!Number.isFinite(ga)||!Number.isFinite(la)||ga<-.1||la<-.1||ga>2||la>1)throw Error('测量时间已过期或电脑与Orin时钟不一致');
@@ -119,7 +125,10 @@
   if(ids.some(id=>!$(id).value.trim()))throw Error('请填写实际初始方向与安装参数');
   const [h]=ids.map(id=>Number($(id).value));
   alignment=NavGeoAlignment.create(gps.value,lio.value,h,0,[0,0,0]);geoFollow=true;
-  cameras.gps.scale=8*alignment.factor;show('gps');notify('已静止对齐，仅显示配准；未启用GPS持续融合或导航');
+  cameras.gps.scale=8*alignment.factor;show('gps');
+  const r=await fetch('/api/operator/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({heading_deg:h}),signal:AbortSignal.timeout(3000)});
+  if(!r.ok)throw Error('导航登记请求失败：'+r.status);
+  notify('地图已对齐，导航初始登记已请求；等待实时坐标状态确认，不会自动起立或移动');
  }catch(e){notify(e.message,'error')}};
  $('clearAlignment').onclick=()=>{alignment=null;draw();notify('已清除地理对齐，不影响LIO或机器人控制')};
  $('followGeo').onclick=()=>{show('gps');geoFollow=true;draw();if(!geoReady())notify('请先完成有效的GPS＋LIO地理对齐','error')};
@@ -132,6 +141,7 @@
   const p=project(gps.value.longitude,gps.value.latitude);cameras.gps.x=p[0];cameras.gps.y=p[1];cameras.gps.scale=Math.max(cameras.gps.scale,1.5);draw();notify('定位成功：已居中显示原始GPS位置（非融合定位）')};
  $('lioHome').onclick=()=>{show('lio');follow=true;draw();notify(goodLio()?'已跟随LIO相对位置':'LIO暂无新鲜数据，等待输入',goodLio()?'info':'error')};
  window.NavMaps={show,draw,update(response,connected){online=connected;gps=response?.samples?.gps||null;lio=response?.samples?.lio||null;navCloud=response?.samples?.nav_cloud||null;cloudStatus=response?.samples?.cloud_status||null;
+   reference=response?.samples?.reference||null;navPlan=response?.samples?.plan||null;if(reference&&typeof reference.value==='string'){try{reference={...reference,value:JSON.parse(reference.value)}}catch(e){reference=null}}
    memory=response?.samples?.memory||null;if(memory&&typeof memory.value==='string'){try{memory={...memory,value:JSON.parse(memory.value)}}catch(e){memory=null}}
    const reset=!connected||!lio||lio.value.epoch!==lastEpoch||lio.value.frame!==lastFrame||lio.value.stamp<lastStamp||(lastStamp!==null&&lio.value.stamp-lastStamp>1)||lio.receive_age_sec>=1;
    if(reset){trajectory=[];if(alignment){alignment=null;notify('LIO中断或坐标重置，旧地理对齐已取消，请静止重新对齐','error')}}

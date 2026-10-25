@@ -60,7 +60,7 @@ try:
     grid.info.resolution=.25;grid.info.width=80;grid.info.height=80
     grid.info.origin.position.x=-10.;grid.info.origin.position.y=-10.;grid.info.origin.orientation.w=1.
     grid.data=array('b',[0]*6400)
-    fake=types.SimpleNamespace(lock=threading.Lock(),access_grid=grid,get_clock=fixture.get_clock,clear=OsmRoadPlanner.clear)
+    fake=types.SimpleNamespace(lock=threading.Lock(),access_width=.5,access_grid=grid,get_clock=fixture.get_clock,clear=OsmRoadPlanner.clear)
     assert OsmRoadPlanner.observed_connector(fake,(0.,0.),(3.,0.))
     grid.data[40*80+44]=100;assert not OsmRoadPlanner.observed_connector(fake,(0.,0.),(3.,0.))
     grid.data[40*80+44]=-1;assert not OsmRoadPlanner.observed_connector(fake,(0.,0.),(3.,0.))

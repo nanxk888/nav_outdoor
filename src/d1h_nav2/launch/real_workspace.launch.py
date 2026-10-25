@@ -7,7 +7,7 @@ from launch import LaunchDescription
 from launch.actions import (DeclareLaunchArgument, ExecuteProcess,
                             OpaqueFunction, RegisterEventHandler, SetEnvironmentVariable,
                             UnsetEnvironmentVariable)
-from launch.event_handlers import OnProcessExit, OnProcessStart
+from launch.event_handlers import OnProcessExit, OnProcessStart, OnShutdown
 from launch.actions import LogInfo
 from launch.logging import get_logger
 from launch.substitutions import LaunchConfiguration
@@ -45,7 +45,16 @@ def configure(context):
     nav_enabled=enabled('with_nav')
     if nav_enabled:
         import json
-        profile=Path(arg('nav_profile')).expanduser()
+        import tempfile
+        if not arg('nav_profile'):
+            p=json.loads((root/'map/real_osm_profile.example.json').read_text(encoding='utf-8'))
+            p['osm_file']=str(root/'map/xd_map.osm')
+            with tempfile.NamedTemporaryFile(mode='w',suffix='.json',prefix='nxk_navigation_',delete=False) as f:
+                json.dump(p,f);profile=Path(f.name)
+            def cleanup(_context):
+                profile.unlink(missing_ok=True);return []
+            actions.append(RegisterEventHandler(OnShutdown(on_shutdown=[OpaqueFunction(function=cleanup)])))
+        else:profile=Path(arg('nav_profile')).expanduser()
         if not profile.is_absolute() or not profile.is_file():
             raise RuntimeError('with_nav requires nav_profile:=/absolute/path/to/osm_profile.json')
         p=json.loads(profile.read_text(encoding='utf-8'))
@@ -85,14 +94,18 @@ def configure(context):
     if enabled('with_memory'):
         critical.append(Node(package='d1h_nav2',executable='lio_memory',name='lio_observed_memory',
             parameters=[{'use_sim_time':False}],arguments=['--ros-args','--log-level',arg('log_level')],output='screen'))
+    critical.append(Node(package='d1h_nav2',executable='navigation_reference',name='navigation_reference',
+        parameters=[{'use_sim_time':False,'sensor_height_m':float(arg('sensor_height_m')),
+                     'profile':str(profile) if nav_enabled else ''}],
+        arguments=['--ros-args','--log-level',arg('log_level')],output='screen'))
     if enabled('with_web'):
         web=ExecuteProcess(cmd=[sys.executable,str(root/'scripts/navigation_web.py')],output='screen',
                            additional_env={'NXK_CONTROL_CONFIG':arg('control_config'),
                                            'NXK_LOG_LEVEL':arg('log_level')},name='navigation_web')
         critical.append(web)
     if nav_enabled:
-        critical.append(ExecuteProcess(cmd=['ros2','launch','d1h_nav2','real_osm_navigation.launch.py',
-            'profile:='+str(profile)],output='screen',name='nav_navigation'))
+        critical.append(ExecuteProcess(cmd=[sys.executable,str(root/'scripts/start_navigation_when_ready.py'),
+            '--profile',str(profile)],output='screen',name='nav_navigation'))
     # Isolate process exits; Ctrl+C still uses launch's normal global shutdown.
     def started(event, _context):
         return [LogInfo(msg='[STARTED] '+event.process_name+' process started; data readiness checked separately')]
@@ -100,7 +113,7 @@ def configure(context):
         actions.append(RegisterEventHandler(OnProcessStart(target_action=process,on_start=started)))
         actions.append(RegisterEventHandler(OnProcessExit(target_action=process,on_exit=report_process_exit)))
     actions.extend(critical)
-    checks=[]
+    checks=['reference']
     for flag,label in [('with_lio','lio'),('with_gps_bridge','gps'),('with_gnss_gate','gate'),
                        ('with_nav_cloud','cloud'),('with_memory','memory'),('with_web','web'),('with_nav','nav')]:
         if enabled(flag):checks.append(label)
@@ -123,8 +136,8 @@ def generate_launch_description():
         DeclareLaunchArgument('with_nav_cloud',default_value='true'),
         DeclareLaunchArgument('with_memory',default_value='true'),
         DeclareLaunchArgument('sensor_height_m',default_value='0.46',description='Measured INITIAL Livox IMU height; override if not in verified low stance'),
-        DeclareLaunchArgument('with_nav',default_value='false'),
-        DeclareLaunchArgument('nav_profile',default_value='',description='OSM geometry/datum profile required when with_nav:=true'),
+        DeclareLaunchArgument('with_nav',default_value='true'),
+        DeclareLaunchArgument('nav_profile',default_value='',description='Optional OSM geometry/datum profile; empty uses project map/example datum'),
         DeclareLaunchArgument('with_gnss_gate',default_value='true'),
         DeclareLaunchArgument('with_web',default_value='true'),
         DeclareLaunchArgument('gps_cyclonedds_xml',default_value='/workspace/d1h-autonomy-final/.local/robot/perception/cyclonedds.xml'),

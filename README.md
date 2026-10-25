@@ -1,6 +1,8 @@
 # nav_outdoor — D1H 真机室外导航
 
-统一启动（含默认地面过滤、可选 Nav2 与一次性就绪日志）：见 [workspace_startup.md](docs/workspace_startup.md)。
+统一启动（含地面过滤、等待初始对齐后启动 Nav2 与一次性就绪日志）：见 [workspace_startup.md](docs/workspace_startup.md)。
+
+GPS/方向初始登记、倾斜IMU水平导航坐标、Nav2→UDP执行链路：见 [navigation_execution.md](docs/navigation_execution.md)。机头是红色急停按钮侧；按操作员确认的IMU +X朝前处理。仍需真机闭环验收。
 
 OSM叠加GPS、LIO轨迹与障碍点：见 [geographic_overlay.md](docs/geographic_overlay.md)。需静止时显式对齐，仅地理显示配准，不代表持续定位融合。
 
@@ -11,7 +13,7 @@ LIO观察记忆、无GPS候选规划及受限道路接入：见 [observed_naviga
 面向 NVIDIA AGX Orin / Ubuntu 22.04 / ROS 2 Humble：复用 FAST-LIVO2 的雷达＋IMU里程计，接入 LC29H GPS，并在 OSM 道路网络上全局选路、利用雷达进行局部避障。
 
 **当前是分模块部署与验证版本，不是已经完成真机自主导航的交付版本。**
-GPS＋LIO全局融合、本体外参适配、真实地面处理及安全监督尚未完成。
+目前实现GPS＋人工航向初始配准，不是持续GPS/LIO融合；虚拟水平导航坐标不等于标定后的厂家本体坐标，地形适用性与整机闭环仍需实测。
 规划入口只发布候选速度；新增的网页/UDP控制适配默认禁用、未实机验收。禁止直接用于无人值守运行。
 
 ## 部署文档

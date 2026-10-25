@@ -16,6 +16,8 @@ else
   echo 'SKIP: D1 FSM ROS integration test requires compiled d1h_robot_bridge.'
 fi
 python3 scripts/test_navigation_control.py
+python3 scripts/test_navigation_reference.py
+python3 scripts/test_navigation_reference_ros.py
 python3 scripts/test_navigation_web.py
 if command -v node >/dev/null 2>&1; then
   node scripts/test_web_viewport.js

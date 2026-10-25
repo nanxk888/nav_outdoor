@@ -32,6 +32,11 @@ def main():
     def gate(msg):done('gate','gate running: '+str(state(msg).get('state','unknown')))
     def memory(msg):
         if state(msg).get('ready') is True:done('memory','LIO observation memory ready; candidate planning only, no motor output')
+    registered=False
+    def reference(msg):
+        nonlocal registered
+        s=state(msg);registered=s.get('registered') is True
+        done('reference','sensor-derived virtual navigation frame running; '+str(s.get('reason','waiting for registration')))
     ground={'ready':False}
     def cloud_status(msg):ground.update(state(msg))
     def cloud(msg,name):
@@ -39,7 +44,8 @@ def main():
         if -.05<=age<.5:cloud_seen.add(name)
         if len(cloud_seen)==2 and ground.get('ready'):done('cloud','ground accepted; both nav/clear streams received')
     for topic,callback in [('/navigation/lio/status',lio),('/localization/gnss/status',gate),
-                           ('/navigation/cloud_filter/status',cloud_status),('/navigation/memory/status',memory)]:
+                           ('/navigation/cloud_filter/status',cloud_status),('/navigation/memory/status',memory),
+                           ('/real_navigation/safety_status',reference)]:
         subs.append(node.create_subscription(String,topic,callback,10))
     subs.append(node.create_subscription(NavSatFix,'/hardware/gnss/fix',gps,qos_profile_sensor_data))
     for name in ('nav','clear'):
@@ -70,6 +76,9 @@ def main():
                 if all(nav_states.get(name)==3 for name in clients):
                     done('nav','planner/controller/BT/local planner lifecycle ACTIVE; NOT proof of TF, safety or navigation readiness')
         for name in sorted(pending):
+            if name=='nav' and not registered:
+                print('[WAIT] nav: select initial heading and register fresh GPS/LIO in web; planner startup deferred, no SDK requirement.',flush=True)
+                continue
             detail=('; ground='+str(ground.get('reason','no status'))) if name=='cloud' else ''
             print('[NOT READY] '+name+': startup check timed out'+detail+'; inspect configuration/data. No motion authorized.',flush=True)
     finally:
