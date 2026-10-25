@@ -10,7 +10,7 @@ class Element{
 }
 const $=id=>{if(!els.has(id))els.set(id,new Element(id));return els.get(id)};
 $('lioView');$('gpsView');
-const context={console,NavViewport:require('../web/viewport.js'),document:{getElementById:$,querySelectorAll:()=>[]},performance:{now:()=>0},ResizeObserver:class{observe(){}},requestAnimationFrame:fn=>fn(),setInterval:()=>0,AbortSignal:{timeout:()=>({})},Math,Number,Array,Promise};
+const context={console,NavViewport:require('../web/viewport.js'),NavGeoAlignment:require('../web/geo_alignment.js'),document:{getElementById:$,querySelectorAll:()=>[]},performance:{now:()=>0},ResizeObserver:class{observe(){}},requestAnimationFrame:fn=>fn(),setInterval:()=>0,AbortSignal:{timeout:()=>({})},Math,Number,Array,Promise};
 context.window=context;context.NavUI={notify:(text,tone)=>messages.push([text,tone])};
 context.fetch=async(url,options)=>{if(options?.method==='POST'){posts.push([url,JSON.parse(options.body)]);return {ok:true,json:async()=>({saved:true})}}return {ok:true,json:async()=>({features:[{properties:{highway:'footway'},geometry:{coordinates:[[108.82,34.12],[108.84,34.14]]}}]})}};
 vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../web/map.js'),'utf8'),context);
@@ -38,6 +38,21 @@ async function click(x,y){$('osm').handlers.pointerdown(event(x,y));await $('osm
  $('headingValue').value='90';await $('saveHeading').onclick();assert.equal(posts.at(-1)[1].heading_deg,90);
  $('swapView').onclick();assert($('lioView').flags.has('is-main'));assert($('gpsView').flags.has('is-mini'));
  context.NavMaps.update(null,false);$('gpsHome').onclick();assert(messages.at(-1)[0].includes('未连接'));
+ const now=Date.now()/1000;
+ scan.lio.value={position:[0,0,0],orientation:[0,0,0,1],frame:'lio_odom',epoch:'one',stamp:now};
+ scan.gps={receive_age_sec:0,value:{valid:true,longitude:108.83,latitude:34.13,stamp:now}};
+ scan.cloud_status.value=JSON.stringify({ready:true});
+ context.NavMaps.update({samples:scan},true);
+ for(const id of ['imuHeadingOffset','antennaX','antennaY','antennaZ'])$(id).value='0';
+ $('headingValue').value='90';$('alignGeo').onclick();
+ assert($('gpsView').flags.has('is-main'));assert($('alignmentState').textContent.includes('已地理配准'));
+ const draws=obstacleDraws;context.NavMaps.draw();assert(obstacleDraws>=draws+2,'both geographic and local view draw the same cloud');
+ scan.gps.value.valid=false;context.NavMaps.update({samples:scan},true);
+ assert($('alignmentState').textContent.includes('仅相对推算'),'GPS loss must be labelled, not silently fused');
+ const beforeStale=obstacleDraws;scan.nav_cloud.receive_age_sec=3;context.NavMaps.update({samples:scan},true);
+ assert.equal(obstacleDraws,beforeStale,'stale obstacles hidden in both views');
+ scan.lio.value.epoch='two';context.NavMaps.update({samples:scan},true);
+ assert($('alignmentState').textContent.includes('未对齐'),'new LIO epoch cancels alignment');
  assert(!posts.some(p=>p[0].startsWith('/api/control')),'map actions must never start motion');
  console.log('PASS: GPS success/no-fix/stale/disconnect feedback; target selection; drag suppression; heading validation; main/mini swap; no motion requests');
 })().catch(e=>{console.error(e);process.exitCode=1});

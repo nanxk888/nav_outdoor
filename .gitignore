@@ -65,10 +65,12 @@ log/
 !/scripts/test_navigation_web.py
 !/scripts/test_web_viewport.js
 !/scripts/test_web_interactions.js
+!/scripts/test_geo_alignment.js
 !/docs/navigation_web.md
 !/docs/robot_control.md
 !/docs/real_navigation_cloud.md
 !/docs/workspace_startup.md
+!/docs/geographic_overlay.md
 !/map/robot_control.example.json
 !/map/gnss_bridge.yaml
 !/web/

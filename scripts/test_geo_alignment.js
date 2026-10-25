@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict');
+const {create}=require('../web/geo_alignment.js'),{project}=require('../web/viewport.js');
+const gps={valid:true,longitude:108.83,latitude:34.13,stamp:10};
+const lio={position:[3,4,0],orientation:[0,0,0,1],frame:'lio_odom',stamp:10,epoch:'a'};
+const close=(a,b)=>assert(Math.abs(a-b)<1e-6,`${a} != ${b}`);
+const base=project(gps.longitude,gps.latitude),factor=Math.cos(gps.latitude*Math.PI/180);
+let a=create(gps,lio,0);close(a.point([3,4])[0],base[0]);close((a.point([13,4])[1]-base[1])*factor,10);
+a=create(gps,lio,90);close((a.point([13,4])[0]-base[0])*factor,10);close(a.point([13,4])[1],base[1]);
+a=create(gps,lio,90,0,[1,0,0]);close((a.point([3,4])[0]-base[0])*factor,-1);
+const q={...lio,orientation:[0,0,Math.sin(Math.PI/4),Math.cos(Math.PI/4)]};
+a=create(gps,q,90);close((a.point([3,14])[0]-base[0])*factor,10);
+a=create(gps,lio,0,90);close((a.point([13,4])[0]-base[0])*factor,10);
+assert.throws(()=>create({...gps,valid:false},lio,0));assert.throws(()=>create({...gps,stamp:11},lio,0));
+assert.throws(()=>create(gps,lio,NaN));assert.throws(()=>create(gps,lio,90,0,[6,0,0]));
+console.log('PASS: metric scale, north/east heading, nonzero initial LIO yaw/position, lever arm, invalid inputs');

@@ -20,6 +20,7 @@ python3 scripts/test_navigation_web.py
 if command -v node >/dev/null 2>&1; then
   node scripts/test_web_viewport.js
   node scripts/test_web_interactions.js
+  node scripts/test_geo_alignment.js
   node scripts/test_web_control.js
 else
   echo 'SKIP: frontend JavaScript unit tests require Node.js (web serving does not).'

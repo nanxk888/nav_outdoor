@@ -2,6 +2,8 @@
 
 统一启动（含默认地面过滤、可选 Nav2 与一次性就绪日志）：见 [workspace_startup.md](docs/workspace_startup.md)。
 
+OSM叠加GPS、LIO轨迹与障碍点：见 [geographic_overlay.md](docs/geographic_overlay.md)。需静止时显式对齐，仅地理显示配准，不代表持续定位融合。
+
 面向 NVIDIA AGX Orin / Ubuntu 22.04 / ROS 2 Humble：复用 FAST-LIVO2 的雷达＋IMU里程计，接入 LC29H GPS，并在 OSM 道路网络上全局选路、利用雷达进行局部避障。
 
 **当前是分模块部署与验证版本，不是已经完成真机自主导航的交付版本。**

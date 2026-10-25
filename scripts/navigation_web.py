@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 import threading
 import time
 import struct
+import uuid
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -22,6 +23,8 @@ samples = {}
 operator_settings = {}
 control = None
 last_cloud_receive=-100.
+lio_epoch=uuid.uuid4().hex
+previous_lio=None
 
 
 def cloud(msg):
@@ -93,10 +96,19 @@ def fix(msg):
 
 
 def odom(msg):
+    global lio_epoch, previous_lio
     p, q = msg.pose.pose.position, msg.pose.pose.orientation
+    stamp=msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+    now=time.monotonic()
+    if previous_lio is not None:
+        old_stamp,old_rx,old_frame,old_pos=previous_lio
+        dt=stamp-old_stamp
+        if dt<=0 or dt>1 or now-old_rx>1 or old_frame!=msg.header.frame_id or math.dist(old_pos,(p.x,p.y,p.z))>.5+2*max(0,dt):
+            lio_epoch=uuid.uuid4().hex
+    previous_lio=(stamp,now,msg.header.frame_id,(p.x,p.y,p.z))
     save('lio', {'position': [p.x, p.y, p.z], 'orientation': [q.x, q.y, q.z, q.w],
                  'frame': msg.header.frame_id, 'child_frame': msg.child_frame_id,
-                 'stamp': msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9})
+                 'stamp': stamp,'epoch':lio_epoch})
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -173,7 +185,7 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == '/api/osm':
             body = osm_data
             mime = 'application/geo+json'
-        elif self.path in ('/map.js','/control.js','/viewport.js','/dashboard.js','/dashboard.css'):
+        elif self.path in ('/map.js','/geo_alignment.js','/control.js','/viewport.js','/dashboard.js','/dashboard.css'):
             body = (ROOT / 'web' / self.path[1:]).read_bytes()
             mime = 'text/css; charset=utf-8' if self.path.endswith('.css') else 'text/javascript; charset=utf-8'
         else:

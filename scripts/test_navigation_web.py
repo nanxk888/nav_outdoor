@@ -28,6 +28,18 @@ def load():
 
 
 class WebTests(unittest.TestCase):
+    def test_lio_epoch_changes_on_gap_frame_or_reset(self):
+        def message(stamp,x=0,frame='lio_odom'):
+            return types.SimpleNamespace(header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=int(stamp),nanosec=round((stamp-int(stamp))*1e9)),frame_id=frame),
+                child_frame_id='lio_imu',pose=types.SimpleNamespace(pose=types.SimpleNamespace(
+                    position=types.SimpleNamespace(x=x,y=0,z=0),orientation=types.SimpleNamespace(x=0,y=0,z=0,w=1))))
+        self.m.previous_lio=None
+        self.m.odom(message(10));first=self.m.samples['lio']['value']['epoch']
+        self.m.odom(message(10.1));self.assertEqual(self.m.samples['lio']['value']['epoch'],first)
+        self.m.odom(message(12));second=self.m.samples['lio']['value']['epoch'];self.assertNotEqual(second,first)
+        self.m.odom(message(12.1,x=3));third=self.m.samples['lio']['value']['epoch'];self.assertNotEqual(second,third)
+        self.m.odom(message(12.2,x=3,frame='new'));self.assertNotEqual(third,self.m.samples['lio']['value']['epoch'])
+
     def test_cloud_preview_layout_and_nan(self):
         field=lambda n,i:types.SimpleNamespace(name=n,offset=i*4,datatype=7,count=1)
         stamp=time.time();sec=int(stamp)
@@ -66,7 +78,7 @@ class WebTests(unittest.TestCase):
         return urlopen(Request(self.base+path,data=json.dumps(body).encode(),headers=headers),timeout=2)
 
     def test_assets(self):
-        for path in ('/','/map.js','/control.js','/viewport.js','/dashboard.js','/dashboard.css'):
+        for path in ('/','/map.js','/geo_alignment.js','/control.js','/viewport.js','/dashboard.js','/dashboard.css'):
             with urlopen(self.base+path,timeout=2) as r:self.assertGreater(len(r.read()),100)
 
     def test_osm(self):
