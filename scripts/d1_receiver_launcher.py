@@ -71,10 +71,7 @@ def main():
     binary=Path(prefix)/'lib/d1h_robot_bridge/fsm_filter'
     if not binary.is_file():raise RuntimeError('Build and source bridge_ws first')
     if a.authorize_motion:
-        sdk=subprocess.check_output(['ros2','param','get',f'/{ns}/teleop_command','use_sdk'],text=True,timeout=10)
-        if 'Boolean value is: True' not in sdk:
-            raise RuntimeError('SDK is not enabled. Operator must explicitly enable vendor SDK mode first; launcher never changes it.')
-        print('AUTHORIZED: receiver will publish zero velocity/current posture. Verify hardware safety and sole command ownership.',flush=True)
+        print('AUTHORIZED: receiver may publish zero velocity/current posture. SDK mode is not a startup prerequisite; receiver reports mode changes and blocks motion outside SDK. Verify hardware safety and sole command ownership.',flush=True)
     else:print('READ ONLY: no control command publication; SDK mode is unchanged.',flush=True)
     commands=[[str(binary),'--ros-args','-p',f'robot_namespace:={ns}','--log-level','error'],
               [sys.executable,str(directory/'robot_udp_receiver.py'),'--bind',a.bind,'--peer',a.peer,

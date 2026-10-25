@@ -24,7 +24,7 @@ Orin（192.168.19.91）产生指令 → UDP 10099 → D1（192.168.19.90）接�
 
 ### 已部署设备的一键启动（前台，不是开机服务）
 
-从Orin复制 `scripts/start_d1_receiver.sh` 和 `scripts/d1_receiver_launcher.py` 到D1的 `/home/robot/nxk_receiver/`，与原三个Python文件、udp.key、bridge_ws同目录。无需重新编译过滤器。默认 `bash /home/robot/nxk_receiver/start_d1_receiver.sh` 是只读；显式增加 `--authorize-motion --allow-pose` 才发布控制。授权启动要求操作员已开启厂家SDK模式，脚本不自动改SDK、不起立、不进loco、不改网卡。可用 `--bind 实际D1IP --peer 实际OrinIP` 覆盖默认.90/.91。
+从Orin复制 `scripts/start_d1_receiver.sh`、`scripts/d1_receiver_launcher.py` 和 `scripts/robot_udp_receiver.py` 到D1的 `/home/robot/nxk_receiver/`，与原Python文件、udp.key、bridge_ws同目录。无需重新编译过滤器。默认 `bash /home/robot/nxk_receiver/start_d1_receiver.sh` 是只读；显式增加 `--authorize-motion --allow-pose` 才发布控制。SDK关闭或未知不再阻止启动：接收器异步读取模式，仅在模式变化时输出 `[MODE]`，程序保持运行。实际动作仍要求SDK开启；切回SDK不会自动恢复旧运动会话。脚本不自动改SDK、不起立、不进loco、不改网卡。可用 `--bind 实际D1IP --peer 实际OrinIP` 覆盖默认.90/.91。
 
 脚本检查重复进程、端口/IP、依赖和密钥，不杀旧进程。一个子进程退出就关闭另一个，不自动重启。Ctrl+C或SSH挂断信号会关闭其管理的进程组，软件退出不等于实机已停稳。普通SSH前台运行仍不保证断线存活；需要时在D1的tmux会话中运行，显式detach（Ctrl+B再D），不要把断SSH当作detach。tmux是否安装需现场检查。仍保留网页心跳失联停车，与后台进程是否存活是两回事。
 

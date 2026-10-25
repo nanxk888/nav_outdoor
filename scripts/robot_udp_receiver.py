@@ -59,7 +59,16 @@ def main():
     params=node.create_client(GetParameters,f'/{ns}/teleop_command/get_parameters')
     controller=node.create_client(Trigger,f'/{ns}/command/get_controller_status')
     checks={'sdk':(False,-100.),'biped':(False,-100.)};pending={}
+    reported_sdk=None
+    def report_sdk():
+        nonlocal reported_sdk
+        value,stamp=checks['sdk']
+        mode=('SDK' if value else 'REMOTE / non-SDK') if time.monotonic()-stamp<2. else 'UNKNOWN (awaiting SDK parameter service)'
+        if mode!=reported_sdk:
+            print('[MODE] '+mode+'; receiver remains running. Non-SDK/unknown blocks motion; switching back does not resume the previous session.',flush=True)
+            reported_sdk=mode
     def query():
+        report_sdk()
         if params.service_is_ready() and ('sdk' not in pending or pending['sdk'].done()):
             request=GetParameters.Request();request.names=['use_sdk']
             f=params.call_async(request);pending['sdk']=f
@@ -67,6 +76,7 @@ def main():
                 try:
                     value=future.result().values[0];checks['sdk']=(value.type==1 and value.bool_value,time.monotonic())
                 except Exception: checks['sdk']=(False,-100.)
+                report_sdk()
             f.add_done_callback(sdk_done)
         if controller.service_is_ready() and ('biped' not in pending or pending['biped'].done()):
             f=controller.call_async(Trigger.Request());pending['biped']=f
