@@ -56,7 +56,7 @@ class ControlTests(unittest.TestCase):
             p=Path(directory);(p/'udp.key').write_text('x'*64)
             (p/'control.json').write_text(json.dumps(dict(orin_ip='127.0.0.1',robot_ip='127.0.0.1',robot_port=10099,
                 key_file=str(p/'udp.key'),hardware_authorized=False,interfaces_verified=False,survey_confirmed=False)))
-            node=types.SimpleNamespace(create_subscription=lambda *a:None,create_timer=lambda *a:None)
+            node=types.SimpleNamespace(create_subscription=lambda *a:None,create_timer=lambda *a:None,create_publisher=lambda *a:None)
             with patch.dict(os.environ,{'NXK_CONTROL_CONFIG':str(p/'control.json')}),patch.dict(Control.__init__.__globals__,{'ActionClient':lambda *a:object()}):
                 c=Control(node)
                 try:self.assertEqual(c.phase,'IDLE');self.assertIsNotNone(c.sock)
@@ -136,6 +136,33 @@ class ControlTests(unittest.TestCase):
         c=self.instance('NAVIGATING');c.safety={'reference_epoch':'old'}
         c.on_safety(types.SimpleNamespace(data='{"reference_epoch":"new"}'))
         self.assertEqual(c.phase,'STOPPED')
+
+    def test_local_execution_is_not_enabled_by_global_safety(self):
+        c=self.instance();c.local_mode=True;c.local_state={};c.local_time=time.monotonic()
+        c.safety_time=time.monotonic();c.safety={'navigation_ready':True,'navigation_base_ready':True,'map_alignment_verified':True,'stamp':99.9}
+        self.assertFalse(c.safe())
+
+    def test_nav2_commands_cannot_override_local_mode(self):
+        c=self.instance('NAVIGATING');c.local_mode=True;c.cmd=(.1,0.)
+        c.on_cmd(object());self.assertEqual(c.cmd,(.1,0.))
+
+    def test_partial_or_stale_local_status_cannot_start(self):
+        c=self.instance('IDLE');c.local_state={'ready':False,'reason':'partial'};c.local_time=time.monotonic()
+        with self.assertRaises(ValueError):c.start_local({'epoch':'e','goal':[1,0]})
+
+    def test_local_ack_and_completion_stop(self):
+        c=self.instance('GOAL_PENDING');c.local_mode=True;c.local_run='run';sent=[]
+        c.local_pub=types.SimpleNamespace(publish=lambda m:sent.append(json.loads(m.data)))
+        c.on_local_status(types.SimpleNamespace(data=json.dumps(dict(stamp=99.9,ready=True,state='ACTIVE',run_id='run',v=.1,w=.2))))
+        self.assertEqual(c.phase,'NAVIGATING');self.assertEqual(c.cmd,(.1,.2))
+        with patch.dict(Control.on_local_status.__globals__,{'String':lambda **k:types.SimpleNamespace(**k)}):
+            c.on_local_status(types.SimpleNamespace(data=json.dumps(dict(state='SUCCEEDED',run_id='run',reason='arrived'))))
+        self.assertEqual(c.phase,'STOPPED');self.assertEqual(c.cmd,(0.,0.));self.assertEqual(sent[-1]['kind'],'stop')
+
+    def test_wrong_local_session_is_not_safe(self):
+        c=self.instance('NAVIGATING');c.local_mode=True;c.local_run='new';c.local_time=time.monotonic()
+        c.local_state=dict(stamp=99.9,ready=True,state='ACTIVE',run_id='old')
+        self.assertFalse(c.safe())
 
     def test_navigation_attach_does_not_stand_if_loco_is_lost(self):
         c=self.instance('ARMING');c.deferred_goal={'latitude':0.,'longitude':0.}

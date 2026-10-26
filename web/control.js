@@ -1,12 +1,13 @@
 let heartbeatEnabled=false,pendingHeartbeat=false;
 const field=id=>document.getElementById(id);
-const controlButtons=['robotStart','robotLoco','robotLower','robotStop','robotPose','robotNavigate'];
+const controlButtons=['robotStart','robotLoco','robotLower','robotStop','robotPose','robotNavigate','robotLocalNavigate'];
+field('robotNavigate').textContent='开始 OSM 导航';
 field('robotRefresh').onclick=async()=>{try{await command('refresh');heartbeatEnabled=false;field('controlResult').textContent='已请求刷新连接；当前运动会话停止，不自动恢复运动'}catch(e){field('controlResult').textContent='刷新失败：'+e.message}};
 async function command(kind,body={}){
  const r=await fetch('/api/control/'+kind,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(1500)});
  if(!r.ok)throw Error(await r.text());return r.json();
 }
-for(const [id,kind] of [['robotStart','start'],['robotLoco','loco'],['robotLower','lower'],['robotStop','stop'],['robotNavigate','navigate']]){
+for(const [id,kind] of [['robotStart','start'],['robotLoco','loco'],['robotLower','lower'],['robotStop','stop'],['robotNavigate','navigate'],['robotLocalNavigate','lio_navigate']]){
  field(id).onclick=async()=>{
   try{
    const body=['loco','lower'].includes(kind)?{confirm_stationary:true}:{};

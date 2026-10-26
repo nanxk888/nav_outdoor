@@ -1,5 +1,8 @@
 # nav_outdoor — D1H 真机室外导航
 
+无GPS第一阶段：人工SDK/loco后，显式执行约1～2米的LIO相对完整路径，见
+[lio_local_navigation.md](docs/lio_local_navigation.md)。不依赖地理Nav2，不自动探索或执行部分前沿；尚需真机闭环验收。
+
 统一启动（含地面过滤、等待初始对齐后启动 Nav2 与一次性就绪日志）：见 [workspace_startup.md](docs/workspace_startup.md)。
 
 GPS/方向初始登记、倾斜IMU水平导航坐标、Nav2→UDP执行链路：见 [navigation_execution.md](docs/navigation_execution.md)。机头是红色急停按钮侧；按操作员实物前后验证，相对IMU +X加入180°水平安装修正。仍需真机闭环验收。

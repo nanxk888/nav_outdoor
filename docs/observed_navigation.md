@@ -1,5 +1,11 @@
 # Observed-space memory and road access
 
+GPS-free first-stage execution is now a separate explicit operation. The memory
+node remains candidate-only, but a new bounded executor can track a full 1-2m local
+goal after manual SDK/loco attachment. Partial/frontier paths still cannot execute.
+See [lio_local_navigation.md](lio_local_navigation.md); historical statements below
+about no local execution are superseded only for this full-path first stage.
+
 ## Current policy: no manual road approval
 
 `survey_confirmed` is no longer checked. An absent/empty `approved_way_ids` now

@@ -16,6 +16,7 @@ else
   echo 'SKIP: D1 FSM ROS integration test requires compiled d1h_robot_bridge.'
 fi
 python3 scripts/test_navigation_control.py
+python3 scripts/test_local_navigation.py
 python3 scripts/test_navigation_reference.py
 python3 scripts/test_navigation_reference_ros.py
 python3 scripts/test_navigation_web.py
@@ -35,6 +36,7 @@ python3 scripts/test_osm_roads.py
 python3 scripts/test_obstacle_memory.py
 python3 scripts/test_observed_memory.py
 python3 scripts/test_lio_memory_ros.py
+python3 scripts/test_real_navigation_execution_ros.py --local
 python3 scripts/test_station_keep.py
 python3 scripts/test_stable_planner.py
 python3 scripts/test_path_handover.py

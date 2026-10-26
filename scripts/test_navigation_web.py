@@ -141,6 +141,19 @@ class WebTests(unittest.TestCase):
             self.assertEqual(len(received),1)
         finally:self.m.registration_pub=old_pub;self.m.String=old_string
 
+    def test_local_navigation_requires_complete_selected_path(self):
+        old=self.m.control;received=[]
+        self.m.control=types.SimpleNamespace(status=lambda:{'enabled':True},enqueue=lambda k,v:received.append((k,v)) or {'queued':True})
+        try:
+            value=dict(ready=True,epoch='e',goal=[1,0],route={'partial':True})
+            self.m.save('memory',json.dumps(value))
+            with self.assertRaises(HTTPError):self.post('/api/control/lio_navigate',{})
+            self.assertFalse(received)
+            value['route']['partial']=False;self.m.save('memory',json.dumps(value))
+            with self.post('/api/control/lio_navigate',{}) as r:self.assertEqual(r.status,202)
+            self.assertEqual(received,[('lio_navigate',{'epoch':'e','goal':[1,0]})])
+        finally:self.m.control=old
+
     def test_no_control_token(self):
         with patch.dict('os.environ',{},clear=True):
             with self.assertRaises(HTTPError) as c:self.post('/api/control/start',{})

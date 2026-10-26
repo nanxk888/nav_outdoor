@@ -1,5 +1,9 @@
 # GPS / LIO navigation execution
 
+For the separate GPS-free short-range full-path mode, see
+[lio_local_navigation.md](lio_local_navigation.md). It does not need this geographic
+registration or the Nav2 launch. Partial/frontier exploration remains preview-only.
+
 Robot forward is the red emergency-stop-button side. The operator confirmed Livox
 IMU +X was initially assumed forward, but the operator's front-chair check confirmed
 the arrow was reversed. Robot forward now uses projected IMU -X (180 degree horizontal

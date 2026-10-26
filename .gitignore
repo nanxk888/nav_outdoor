@@ -46,6 +46,7 @@ log/
 !/scripts/test_navigation_reference.py
 !/scripts/test_navigation_reference_ros.py
 !/scripts/test_real_navigation_execution_ros.py
+!/scripts/test_local_navigation.py
 !/scripts/test_workspace_exit.py
 !/scripts/stop_real_workspace.py
 !/scripts/stop_real_workspace.sh
@@ -79,6 +80,7 @@ log/
 !/docs/geographic_overlay.md
 !/docs/observed_navigation.md
 !/docs/navigation_execution.md
+!/docs/lio_local_navigation.md
 !/map/robot_control.example.json
 !/map/gnss_bridge.yaml
 !/web/

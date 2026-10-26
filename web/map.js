@@ -78,7 +78,7 @@
   drawMemory(ctx,camera,p=>p);
   const selected=memory?.value?.goal||((localGoal&&localGoal.epoch===memory?.value?.epoch)?localGoal.point:null);
   if(selected){const p=camera.screen(selected);marker(ctx,p,'#ffcb79',7);ctx.fillStyle='#ffcb79';ctx.fillText('LIO目标（候选规划）',p[0]+12,p[1]-10)}
-  $('memoryHint').textContent=memoryReady()?`观察记忆（抽样显示） ${memory.value.cell_count}格 / ${memory.value.retention_sec}s · ${memory.value.route?.reason||memory.value.reason} · 仅候选规划，未接运动`:'等待LIO观察记忆；未知区域不当作空闲';
+  $('memoryHint').textContent=memoryReady()?`观察记忆（抽样显示） ${memory.value.cell_count}格 / ${memory.value.retention_sec}s · ${memory.value.route?.reason||memory.value.reason} · 选点仅预览；完整路径可显式启动LIO导航`:'等待LIO观察记忆；未知区域不当作空闲';
   const cv=navCloud?.value;
   let reason='等待导航障碍点云';
   if(!online)reason='网关断开，障碍预览已隐藏';
@@ -158,6 +158,8 @@
  window.NavMaps={show,draw,update(response,connected){online=connected;gps=response?.samples?.gps||null;lio=response?.samples?.lio||null;navCloud=response?.samples?.nav_cloud||null;cloudStatus=response?.samples?.cloud_status||null;
    reference=response?.samples?.reference||null;navPlan=response?.samples?.plan||null;if(reference&&typeof reference.value==='string'){try{reference={...reference,value:JSON.parse(reference.value)}}catch(e){reference=null}}
    memory=response?.samples?.memory||null;if(memory&&typeof memory.value==='string'){try{memory={...memory,value:JSON.parse(memory.value)}}catch(e){memory=null}}
+   const execution=response?.samples?.local_execution;
+   try{const v=typeof execution?.value==='string'?JSON.parse(execution.value):execution?.value;$('localExecutionHint').textContent=connected&&execution&&execution.receive_age_sec<1?`${v.state} · ${v.reason} · ${v.ready?'完整路径输入就绪':'暂不可执行'}`:'本地执行器离线/状态过期'}catch(e){$('localExecutionHint').textContent='本地执行状态无效'}
    // A changed backend epoch acknowledges reset (also covers resets from another tab).
    const memoryEpoch=memory?.value?.epoch;
    if(memoryEpoch){

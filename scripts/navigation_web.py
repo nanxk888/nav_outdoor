@@ -159,6 +159,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not local or time.monotonic()-local['received_monotonic']>1 or local['value']['frame']!=value['frame'] or math.dist(local['value']['position'][:2],(value['x'],value['y']))>100:
                     raise ValueError('LIO unavailable or candidate goal exceeds 100m')
                 request=dict(value,request_time=time.time());memory_goal_pub.publish(String(data=json.dumps(request)))
+                with lock:operator_settings['goal_mode']='lio'
                 body=json.dumps({'queued':True,'candidate_only':True,'executed':False}).encode()
                 self.send_response(202);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)))
                 self.end_headers();self.wfile.write(body);return
@@ -171,7 +172,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not control.status().get('enabled'):
                     raise ValueError('Hardware control configuration is disabled')
                 kind = self.path.rsplit('/',1)[-1]
-                if kind not in ('start','stop','heartbeat','navigate','lower','pose','loco'):
+                if kind not in ('start','stop','heartbeat','navigate','lio_navigate','lower','pose','loco'):
                     raise ValueError('invalid control request')
                 if kind=='pose':
                     from robot_policy import posture
@@ -179,8 +180,17 @@ class Handler(BaseHTTPRequestHandler):
                 elif kind in ('lower','loco'):
                     if value!={'confirm_stationary':True}:raise ValueError('Confirm physical standstill first')
                 elif value!={}:raise ValueError('Unexpected fields')
-                if kind == 'navigate':
-                    with lock: target = operator_settings.get('latitude')
+                if kind=='lio_navigate':
+                    with lock:record=samples.get('memory')
+                    if not record or time.monotonic()-record['received_monotonic']>1:raise ValueError('Local memory unavailable')
+                    m=json.loads(record['value'])
+                    if not m.get('ready') or not m.get('goal') or not m.get('route') or m['route'].get('partial') is not False:
+                        raise ValueError('Select a LIO goal with a complete path; frontier paths cannot execute')
+                    target=dict(epoch=m['epoch'],goal=m['goal'])
+                elif kind == 'navigate':
+                    with lock:
+                        target = operator_settings.get('latitude')
+                        if operator_settings.get('goal_mode')=='lio':raise ValueError('LIO target selected; use Start LIO navigation, not OSM navigation')
                     if not target: raise ValueError('Select target first')
                 else: target = value
                 try: result = control.enqueue(kind, target)
@@ -199,6 +209,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError('heading must be [0,360) degrees clockwise from north')
             with lock:
                 operator_settings[keys[0]] = dict(value)
+                if self.path.endswith('goal'):operator_settings['goal_mode']='geographic'
             body = json.dumps({'saved': True, 'executed': False, 'value': value,
                                'reason': 'Preview only: localization/navigation adapters not connected'}).encode()
         except (ValueError, TypeError, KeyError):
@@ -284,7 +295,7 @@ def main():
     for topic, key in [('/localization/gnss/status', 'gps_status'),
                        ('/navigation/lio/status', 'lio_status'),
                        ('/navigation/cloud_filter/status','cloud_status'),('/navigation/memory/status','memory'),
-                       ('/real_navigation/safety_status','reference')]:
+                       ('/real_navigation/safety_status','reference'),('/navigation/local_execution/status','local_execution')]:
         subs.append(node.create_subscription(String, topic, lambda m, k=key: save(k, m.data), 10))
     subs.append(node.create_subscription(RosPath, '/plan', lambda m: save('plan', {
         'frame': m.header.frame_id, 'points': [[p.pose.position.x, p.pose.position.y]
