@@ -17,7 +17,7 @@ from sensor_msgs.msg import NavSatFix
 from std_msgs.msg import String
 from geometry_msgs.msg import TransformStamped
 from tf2_ros import TransformBroadcaster
-from d1h_nav2.navigation_reference import heading,registration
+from d1h_nav2.navigation_reference import body_heading as heading,registration
 from d1h_nav2.osm_roads import project
 
 
@@ -146,7 +146,7 @@ class NavigationReference(Node):
             navigation_ready=ready,navigation_base_ready=pose,base_link_ready=False,map_alignment_verified=self.anchor is not None,
             reference_epoch=self.epoch,registered=self.anchor is not None,reason=self.reason,
             datum_latitude_deg=self.datum[0],datum_longitude_deg=self.datum[1],reference_frame='navigation_base',
-            model='virtual ground-projected IMU; +X operator-confirmed forward; not vendor base_link',
+            model='virtual ground-projected IMU; robot forward opposite IMU +X (180 deg field correction); not vendor base_link',
             anchor_kind='GPS + manual initial bearing, not continuous fusion'))))
 
 

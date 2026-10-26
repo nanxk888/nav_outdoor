@@ -3,10 +3,18 @@ import math
 import unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src/d1h_nav2'))
-from d1h_nav2.navigation_reference import heading,registration
+from d1h_nav2.navigation_reference import heading,body_heading,registration
 
 
 class ReferenceTests(unittest.TestCase):
+    def test_field_verified_reversed_body_axis(self):
+        self.assertAlmostEqual(abs(body_heading((0,0,0,1))),math.pi)
+        self.assertAlmostEqual(body_heading((0,0,1,0)),0.,places=6)
+        # A chair in native -X must be ahead in the corrected body frame.
+        a=body_heading((0,0,0,1))
+        self.assertAlmostEqual(math.cos(a)*(-2),2.)
+        x,y,r=registration((0,0),(0,0),a,0)
+        self.assertAlmostEqual(math.sin(r)*(-2),2.)
     def test_tilted_forward_projects_correctly(self):
         a=math.radians(-30)
         self.assertAlmostEqual(heading((0,math.sin(a/2),0,math.cos(a/2))),0)

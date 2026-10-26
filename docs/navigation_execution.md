@@ -1,7 +1,12 @@
 # GPS / LIO navigation execution
 
 Robot forward is the red emergency-stop-button side. The operator confirmed Livox
-IMU +X points forward. The tilted IMU is NOT treated as a level vendor body frame.
+IMU +X was initially assumed forward, but the operator's front-chair check confirmed
+the arrow was reversed. Robot forward now uses projected IMU -X (180 degree horizontal
+mounting correction), consistently in browser arrows, geographic registration and
+navigation_base odometry/TF/twist. Raw LIO and sensor clouds are NOT rotated or negated.
+Restart the workspace and redo GPS/manual-bearing registration after updating.
+The tilted IMU is NOT treated as a level vendor body frame.
 
 ## Startup and operation
 
@@ -37,7 +42,8 @@ profile can override geometry/datum. `with_nav:=false` disables Nav2 startup.
 `/odometry/local`, and timestamped TF from native LIO. It retains the full tilted
 orientation for the IMU/sensor transform. This is a planar projected reference, NOT
 a calibrated vendor `base_link`. GPS/IMU co-location and IMU +X/body-forward are
-operator-supplied approximations. The circular 0.6 m footprint is a provisional
+operator-supplied approximations, with the 180 degree field correction above taking
+precedence over the former +X assumption. The circular 0.6 m footprint is a provisional
 conservative planning model, not a measured robot outline.
 
 GPS plus manual heading initializes `map -> odom`. This is **initial registration,

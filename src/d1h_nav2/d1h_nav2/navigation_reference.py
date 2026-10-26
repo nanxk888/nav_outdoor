@@ -1,4 +1,4 @@
-"""Planar reference from tilted IMU +X (operator-confirmed robot forward)."""
+"""Raw projected IMU +X heading and field-corrected robot heading (opposite +X)."""
 import math
 
 
@@ -18,3 +18,9 @@ def registration(gps_xy,lio_xy,imu_heading,bearing_deg):
     yaw=math.pi/2-math.radians(bearing_deg)-imu_heading
     c,s=math.cos(yaw),math.sin(yaw)
     return (gps_xy[0]-c*lio_xy[0]+s*lio_xy[1],gps_xy[1]-s*lio_xy[0]-c*lio_xy[1],yaw)
+
+
+def body_heading(q):
+    """Field landmark check: robot nose is opposite the projected IMU +X."""
+    a=heading(q)+math.pi
+    return math.atan2(math.sin(a),math.cos(a))

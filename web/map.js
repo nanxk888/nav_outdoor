@@ -92,7 +92,7 @@
   $('cloudHint').textContent=reason;
   ctx.strokeStyle=goodLio()?'#6bdcc6':'#637e86';ctx.lineWidth=2;ctx.beginPath();trajectory.forEach((p,i)=>{const v=camera.screen(p);i?ctx.lineTo(...v):ctx.moveTo(...v)});ctx.stroke();
   if(position){
-   const p=camera.screen(position),yaw=NavGeoAlignment.horizontalHeading(lio.value.orientation);
+   const p=camera.screen(position),yaw=NavGeoAlignment.bodyHeading(lio.value.orientation);
    if(goodLio()&&yaw!==null){
     // Fixed-size body-forward arrow; canvas Y points down, native LIO Y points up.
     const c=Math.cos(yaw),s=Math.sin(yaw),shape=[[12,0],[-7,5],[-4,0],[-7,-5]];

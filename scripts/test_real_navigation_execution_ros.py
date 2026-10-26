@@ -84,7 +84,7 @@ def main():
                     next_pub=now+.1
                     h=Header();h.frame_id='lio_odom';h.stamp=fixture.get_clock().now().to_msg()
                     o=Odometry();o.header=h;o.child_frame_id='lio_imu'
-                    o.pose.pose.orientation.y=math.sin(-math.pi/12);o.pose.pose.orientation.w=math.cos(math.pi/12)
+                    o.pose.pose.orientation.x=-math.sin(-math.pi/12);o.pose.pose.orientation.z=math.cos(math.pi/12);o.pose.pose.orientation.w=0.
                     g=NavSatFix();g.header.stamp=h.stamp;g.status.status=0;g.latitude=0.;g.longitude=0.
                     latest.update(odom=o,gps=g);pubs['odom'].publish(o);pubs['gps'].publish(g)
                     pubs['nav'].publish(point_cloud2.create_cloud_xyz32(h,[]));pubs['clear'].publish(point_cloud2.create_cloud_xyz32(h,circle))

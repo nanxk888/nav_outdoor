@@ -46,7 +46,8 @@ try:
     step(2.)
     assert records and records[-1]['navigation_base_ready'] and not records[-1]['registered']
     assert outputs[-1].child_frame_id=='navigation_base' and outputs[-1].pose.pose.orientation.y==0.
-    assert abs(outputs[-1].twist.twist.linear.x-.1*math.cos(math.pi/6))<1e-6
+    assert abs(outputs[-1].twist.twist.linear.x+.1*math.cos(math.pi/6))<1e-6
+    assert abs(abs(outputs[-1].pose.pose.orientation.z)-1)<1e-6
     pubs['register'].publish(String(data=json.dumps(dict(heading_deg=0.,lio_stamp=stamp(latest['odom']),gps_stamp=stamp(latest['gps']),request_time=time.time()))))
     step(1.)
     assert records[-1]['navigation_ready'],records[-1]

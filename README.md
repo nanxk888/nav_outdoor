@@ -2,7 +2,7 @@
 
 统一启动（含地面过滤、等待初始对齐后启动 Nav2 与一次性就绪日志）：见 [workspace_startup.md](docs/workspace_startup.md)。
 
-GPS/方向初始登记、倾斜IMU水平导航坐标、Nav2→UDP执行链路：见 [navigation_execution.md](docs/navigation_execution.md)。机头是红色急停按钮侧；按操作员确认的IMU +X朝前处理。仍需真机闭环验收。
+GPS/方向初始登记、倾斜IMU水平导航坐标、Nav2→UDP执行链路：见 [navigation_execution.md](docs/navigation_execution.md)。机头是红色急停按钮侧；按操作员实物前后验证，相对IMU +X加入180°水平安装修正。仍需真机闭环验收。
 
 OSM叠加GPS、LIO轨迹与障碍点：见 [geographic_overlay.md](docs/geographic_overlay.md)。需静止时显式对齐，仅地理显示配准，不代表持续定位融合。
 
