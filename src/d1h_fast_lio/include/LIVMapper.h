@@ -106,6 +106,7 @@ public:
   bool navigation_seen_cloud = false, navigation_seen_imu = false;
   double navigation_output_time = -1.0;
   double navigation_max_age = 0.5;
+  static constexpr size_t navigation_cloud_capacity = 6;
   std::string navigation_odom_frame, navigation_imu_frame;
   StatesGroup imu_propagate, latest_ekf_state;
 

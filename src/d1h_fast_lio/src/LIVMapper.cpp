@@ -15,6 +15,8 @@ which is included as part of this source code package.
 #include <vikit/camera_loader.h>
 #include <sstream>
 #include <iomanip>
+#include <iostream>
+#include <rclcpp/executors/single_threaded_executor.hpp>
 
 using namespace Sophus;
 LIVMapper::LIVMapper(rclcpp::Node::SharedPtr &node, std::string node_name)
@@ -312,17 +314,17 @@ void LIVMapper::initializeSubscribersAndPublishers(rclcpp::Node::SharedPtr &node
     this->node->get_parameter("common.livox_msg_type", livox_msg_type);
 
     if (livox_msg_type == "livox_interfaces") {
-      sub_pcl = this->node->create_subscription<livox_interfaces::msg::CustomMsg>(lid_topic, 4, std::bind(&LIVMapper::livox_interfaces_pcl_cbk, this, std::placeholders::_1));
+      sub_pcl = this->node->create_subscription<livox_interfaces::msg::CustomMsg>(lid_topic, navigation_cloud_capacity, std::bind(&LIVMapper::livox_interfaces_pcl_cbk, this, std::placeholders::_1));
       RCLCPP_INFO(this->node->get_logger(), "Using livox_interfaces::msg::CustomMsg for '%s'", lid_topic.c_str());
     } else {
-      sub_pcl = this->node->create_subscription<livox_custom_msg::CustomMsg>(lid_topic, 4, std::bind(&LIVMapper::livox_pcl_cbk, this, std::placeholders::_1));
+      sub_pcl = this->node->create_subscription<livox_custom_msg::CustomMsg>(lid_topic, navigation_cloud_capacity, std::bind(&LIVMapper::livox_pcl_cbk, this, std::placeholders::_1));
       RCLCPP_INFO(this->node->get_logger(), "Using livox_ros_driver2::msg::CustomMsg for '%s'", lid_topic.c_str());
     }
 #else
-    sub_pcl = this->node->create_subscription<livox_custom_msg::CustomMsg>(lid_topic, 4, std::bind(&LIVMapper::livox_pcl_cbk, this, std::placeholders::_1));
+    sub_pcl = this->node->create_subscription<livox_custom_msg::CustomMsg>(lid_topic, navigation_cloud_capacity, std::bind(&LIVMapper::livox_pcl_cbk, this, std::placeholders::_1));
 #endif
   } else {
-    sub_pcl = this->node->create_subscription<sensor_msgs::msg::PointCloud2>(lid_topic, 4, std::bind(&LIVMapper::standard_pcl_cbk, this, std::placeholders::_1));
+    sub_pcl = this->node->create_subscription<sensor_msgs::msg::PointCloud2>(lid_topic, navigation_cloud_capacity, std::bind(&LIVMapper::standard_pcl_cbk, this, std::placeholders::_1));
   }
   sub_imu = this->node->create_subscription<sensor_msgs::msg::Imu>(imu_topic, 400, std::bind(&LIVMapper::imu_cbk, this, std::placeholders::_1));
   // No image subscription.
@@ -714,10 +716,16 @@ void LIVMapper::savePCD()
 
 void LIVMapper::run(rclcpp::Node::SharedPtr &node) 
 {
+  // Execute at most one callback before attempting to consume synchronized data.
+  // spin_some may drain a burst before sync_packages gets a chance to run.
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(this->node);
+  bool waiting_sync = true, waiting_initialization = true;
+  std::cerr << "Navigation LIO: waiting for matched LiDAR/IMU; queue capacity=6, no navigation output before initialization" << std::endl;
   rclcpp::Rate rate(5000);
   while (rclcpp::ok()) 
   {
-    rclcpp::spin_some(this->node);
+    executor.spin_once(std::chrono::nanoseconds(0));
     const auto steady_now = std::chrono::steady_clock::now();
     const auto seconds = [&](auto t) { return std::chrono::duration<double>(steady_now-t).count(); };
     if (seconds(navigation_cloud_rx) > (navigation_seen_cloud ? 0.5 : 3.0) ||
@@ -729,12 +737,22 @@ void LIVMapper::run(rclcpp::Node::SharedPtr &node)
       continue;
     }
     handleFirstFrame();
+    if (waiting_sync) {
+      waiting_sync=false;
+      std::cerr << "Navigation LIO: sensor synchronization ready; keep stationary for IMU initialization" << std::endl;
+    }
 
     processImu();
 
     // if (!p_imu->imu_time_init) continue;
 
-    if (!p_imu->imu_need_init) stateEstimationAndMapping();
+    if (!p_imu->imu_need_init) {
+      if (waiting_initialization) {
+        waiting_initialization=false;
+        std::cerr << "Navigation LIO: IMU initialized; processing live scans" << std::endl;
+      }
+      stateEstimationAndMapping();
+    }
     LidarMeasures.measures.clear();
     if (voxel_map.size() > 100000)
       throw std::runtime_error("Registration root-voxel capacity exceeded");
@@ -926,18 +944,22 @@ void LIVMapper::livox_pcl_cbk(const livox_custom_msg::CustomMsg::ConstSharedPtr 
   if (!std::isfinite(input_time) || input_time <= 0 ||
       (navigation_seen_cloud && input_time <= last_timestamp_lidar) ||
       input_age < -0.05 || input_age > navigation_max_age || msg_in->point_num > 100000 ||
-      msg_in->point_num != msg_in->points.size() || lid_raw_data_buffer.size() >= 4)
+      msg_in->point_num != msg_in->points.size() || lid_raw_data_buffer.size() >= navigation_cloud_capacity)
   {
     std::ostringstream error;
     error << std::setprecision(16) << "LiDAR validation failed: stamp=" << input_time
           << " previous=" << last_timestamp_lidar << " age_sec=" << input_age
           << " max_age_sec=" << navigation_max_age << " queue=" << lid_raw_data_buffer.size()
-          << "/4 point_num=" << msg_in->point_num << " points_size=" << msg_in->points.size()
+          << "/" << navigation_cloud_capacity << " point_num=" << msg_in->point_num << " points_size=" << msg_in->points.size()
+          << " imu_queue=" << imu_buffer.size() << " latest_imu=" << last_timestamp_imu
+          << " oldest_scan_begin=" << (lid_header_time_buffer.empty() ? -1. : lid_header_time_buffer.front())
+          << " oldest_scan_end=" << (lid_raw_data_buffer.empty() || lid_raw_data_buffer.front()->empty() ? -1. :
+              lid_header_time_buffer.front()+lid_raw_data_buffer.front()->points.back().curvature/1000.)
           << " flags[bad_stamp=" << (!std::isfinite(input_time) || input_time <= 0)
           << " nonincreasing=" << (navigation_seen_cloud && input_time <= last_timestamp_lidar)
           << " future=" << (input_age < -.05) << " stale=" << (input_age > navigation_max_age)
           << " invalid_count=" << (msg_in->point_num > 100000 || msg_in->point_num != msg_in->points.size())
-          << " queue_full=" << (lid_raw_data_buffer.size() >= 4) << "]";
+          << " queue_full=" << (lid_raw_data_buffer.size() >= navigation_cloud_capacity) << "]";
     throw std::runtime_error(error.str());
   }
   navigation_seen_cloud = true; navigation_cloud_rx = std::chrono::steady_clock::now();
@@ -1035,13 +1057,13 @@ void LIVMapper::imu_cbk(const sensor_msgs::msg::Imu::ConstSharedPtr &msg_in)
   navigation_seen_imu = true; navigation_imu_rx = std::chrono::steady_clock::now();
   if (!imu_en) return;
 
-  if (last_timestamp_lidar < 0.0) return;
+  // Retain fresh IMU samples even when IMU discovery precedes the first scan.
   RCLCPP_DEBUG(this->node->get_logger(), "get imu at time: %.6f", stamp2Sec(msg_in->header.stamp));
   sensor_msgs::msg::Imu::SharedPtr msg(new sensor_msgs::msg::Imu(*msg_in));
   msg->header.stamp = sec2Stamp(stamp2Sec(msg->header.stamp) - imu_time_offset);
   double timestamp = stamp2Sec(msg->header.stamp);
 
-  if (fabs(last_timestamp_lidar - timestamp) > 0.5 && (!ros_driver_fix_en))
+  if (last_timestamp_lidar > 0 && fabs(last_timestamp_lidar - timestamp) > 0.5 && (!ros_driver_fix_en))
   {
     RCLCPP_WARN(this->node->get_logger(), "IMU and LiDAR not synced! delta time: %lf .\n", last_timestamp_lidar - timestamp);
   }

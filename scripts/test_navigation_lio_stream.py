@@ -1,5 +1,6 @@
 """Stationary analytic CustomMsg/IMU smoke test. Not hardware accuracy evidence."""
 import json
+import argparse
 import math
 import os
 from pathlib import Path
@@ -16,6 +17,9 @@ from std_msgs.msg import String
 
 
 def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--startup-order',choices=['simultaneous','imu-first','lidar-first'],default='simultaneous')
+    order=parser.parse_args().startup_order
     root=Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory(prefix='navigation-lio-test-') as tmp:
         profile=yaml.safe_load((root/'src/d1h_fast_lio/config/navigation_lio.yaml').read_text())
@@ -58,8 +62,10 @@ def main():
                             raise AssertionError('DDS/estimator startup timeout: '+log.read_text())
                     now=node.get_clock().now().nanoseconds/1e9
                     imu=Imu();imu.header.frame_id='livox_frame';imu.header.stamp=stamp(now)
-                    imu.linear_acceleration.z=1.;pi.publish(imu)
-                    if time.monotonic()>=next_cloud:
+                    imu.linear_acceleration.z=1.
+                    elapsed=time.monotonic()-test_started if test_started is not None else 0.
+                    if order!='lidar-first' or elapsed>=.2:pi.publish(imu)
+                    if time.monotonic()>=next_cloud and (order!='imu-first' or elapsed>=.2):
                         cloud=CustomMsg();cloud.header.frame_id='livox_frame';cloud.header.stamp=stamp(now-.1)
                         cloud.timebase=round((now-.1)*1e9)
                         for i,(x,y,z) in enumerate(geometry):
@@ -67,7 +73,7 @@ def main():
                             point.line=i%4;point.tag=0x10;point.offset_time=round(i/(len(geometry)-1)*95000000)
                             cloud.points.append(point)
                         cloud.point_num=len(cloud.points);pc.publish(cloud)
-                        scan_ends.append(now-.005);next_cloud+=.1
+                        scan_ends.append(now-.005);next_cloud=time.monotonic()+.1
                     rclpy.spin_once(node,timeout_sec=.001)
                     time.sleep(.003)
                 assert len(odoms)>=10,(len(odoms),log.read_text())
@@ -88,7 +94,7 @@ def main():
                 while process.poll() is None and time.monotonic()<deadline:
                     rclpy.spin_once(node,timeout_sec=.05)
                 assert process.poll() is not None and process.returncode!=0,log.read_text()
-                print('PASS: analytic static outputs=',len(odoms),'max_position_norm_m=',deviation,
+                print('PASS:',order,'analytic static outputs=',len(odoms),'max_position_norm_m=',deviation,
                       '; measurement time, frames, covariance, no-camera input and input-loss exit verified')
             finally:
                 if process.poll() is None:

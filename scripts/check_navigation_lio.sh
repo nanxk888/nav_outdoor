@@ -8,3 +8,5 @@ if [ "${1:-}" != "--stream-only" ]; then
   ctest --test-dir build/d1h_fast_lio --output-on-failure
 fi
 python3 scripts/test_navigation_lio_stream.py
+python3 scripts/test_navigation_lio_stream.py --startup-order imu-first
+python3 scripts/test_navigation_lio_stream.py --startup-order lidar-first
