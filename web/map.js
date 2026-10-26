@@ -7,7 +7,7 @@
  let features=[],bounds=null,loadError='',gps=null,lio=null,navCloud=null,cloudStatus=null,online=false,receivedAt=0;
  let active='lio',mode='pan',goal=null,heading=null,follow=true,trajectory=[],lastStamp=null;
  let alignment=null,lastEpoch=null,lastFrame=null,geoFollow=true;
- let memory=null;
+ let memory=null,localGoal=null;
  let reference=null,navPlan=null;
  function memoryReady(){return goodLio()&&memory&&age(memory)<1.5&&memory.value?.ready&&memory.value.frame===lio.value.frame&&Math.abs(memory.value.source_stamp-lio.value.stamp)<1}
  function drawMemory(ctx,camera,convert){
@@ -17,6 +17,7 @@
   if(m.route?.points){ctx.strokeStyle=m.route.partial?'#f4cd71':'#82bafa';ctx.lineWidth=3;ctx.beginPath();m.route.points.forEach((p,i)=>{const v=camera.screen(convert(p));i?ctx.lineTo(...v):ctx.moveTo(...v)});ctx.stroke()}
  }
  async function memoryGoal(p){
+  localGoal={point:p,epoch:memory?.value?.epoch};draw();
   if(!memoryReady()){notify('记忆地图尚未就绪，无法生成候选路径','error');return}
   try{const m=memory.value,r=await fetch('/api/operator/lio_goal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({x:p[0],y:p[1],frame:m.frame,epoch:m.epoch}),signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error(r.status);notify('已请求记忆候选路径：仅规划预览，不会让机器人移动')}catch(e){notify('记忆规划请求失败：'+e.message,'error')}
  }
@@ -70,6 +71,8 @@
   for(let y=Math.ceil(lo[1]/step)*step;y<=hi[1];y+=step){const p=camera.screen([0,y]);ctx.beginPath();ctx.moveTo(0,p[1]);ctx.lineTo(camera.width,p[1]);ctx.stroke()}
   const origin=camera.screen([0,0]);ctx.fillStyle='#688a99';ctx.font='11px system-ui';ctx.fillText('LIO起点',origin[0]+8,origin[1]-8);
   drawMemory(ctx,camera,p=>p);
+  const selected=memory?.value?.goal||((localGoal&&localGoal.epoch===memory?.value?.epoch)?localGoal.point:null);
+  if(selected){const p=camera.screen(selected);marker(ctx,p,'#ffcb79',7);ctx.fillStyle='#ffcb79';ctx.fillText('LIO目标（候选规划）',p[0]+12,p[1]-10)}
   $('memoryHint').textContent=memoryReady()?`观察记忆（抽样显示） ${memory.value.cell_count}格 / ${memory.value.retention_sec}s · ${memory.value.route?.reason||memory.value.reason} · 仅候选规划，未接运动`:'等待LIO观察记忆；未知区域不当作空闲';
   const cv=navCloud?.value;
   let reason='等待导航障碍点云';

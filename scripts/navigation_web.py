@@ -163,6 +163,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(202);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)))
                 self.end_headers();self.wfile.write(body);return
             if is_control:
+                if self.path=='/api/control/refresh':
+                    if value!={}:raise ValueError('Unexpected fields')
+                    control.refresh_requested=True
+                    body=b'{"queued":true,"executed":false}'
+                    self.send_response(202);self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
                 if not control.status().get('enabled'):
                     raise ValueError('Hardware control configuration is disabled')
                 kind = self.path.rsplit('/',1)[-1]
@@ -244,7 +249,32 @@ def main():
     rclpy.init()
     node = rclpy.create_node('navigation_web_readonly')
     from navigation_control import Control
-    control = Control(node)
+    class ResilientControl:
+        def __init__(self):
+            self.inner=None;self.error='Waiting for robot connection';self.refresh_requested=True;self.last_attempt=-100.
+        def status(self):
+            return self.inner.status() if self.inner else dict(enabled=False,phase='OFFLINE',reason=self.error,robot={},robot_receive_age_sec=None)
+        def enqueue(self,*args):
+            if not self.inner:raise ValueError(self.error)
+            return self.inner.enqueue(*args)
+        def close(self):
+            if self.inner:self.inner.close()
+        def poll(self):
+            now=time.monotonic()
+            if self.inner:
+                if self.refresh_requested:
+                    self.inner.stop('Operator connection refresh; no automatic motion resume')
+                    self.inner.send('hello');self.refresh_requested=False
+                return
+            if not self.refresh_requested and now-self.last_attempt<5:return
+            self.last_attempt=now;self.refresh_requested=False
+            try:
+                candidate=Control(node)
+                if candidate.sock:self.inner=candidate
+                else:self.error=candidate.reason
+            except (OSError,ValueError,KeyError,TypeError) as exc:self.error='Robot control offline: '+str(exc)
+    control = ResilientControl()
+    reconnect_timer=node.create_timer(1.,control.poll)
     memory_goal_pub=node.create_publisher(String,'/navigation/memory/goal_candidate',1)
     memory_reset_pub=node.create_publisher(String,'/navigation/memory/reset',1)
     registration_pub=node.create_publisher(String,'/navigation/reference/register',1)

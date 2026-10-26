@@ -34,7 +34,9 @@ class Control:
         self.key = Path(c['key_file']).read_bytes().strip()
         if len(self.key) < 32: raise ValueError('Shared key too short')
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind((c['orin_ip'], 0)); self.sock.setblocking(False)
+        try:self.sock.bind((c['orin_ip'], 0)); self.sock.setblocking(False)
+        except OSError:
+            self.sock.close();self.sock=None;raise
         self.target = (c['robot_ip'], int(c.get('robot_port', 10099)))
         self.session = secrets.token_hex(16); self.nonce = ''; self.operation = ''
         self.nav = ActionClient(node, NavigateToPose, '/navigate_to_pose')
