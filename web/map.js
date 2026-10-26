@@ -8,7 +8,7 @@
  let active='lio',mode='pan',goal=null,heading=null,follow=true,trajectory=[],lastStamp=null;
  let alignment=null,lastEpoch=null,lastFrame=null,geoFollow=true;
  let memory=null,localGoal=null;
- let reference=null,navPlan=null;
+ let reference=null,navPlan=null,initialLioHeading=null;
  function memoryReady(){return goodLio()&&memory&&age(memory)<1.5&&memory.value?.ready&&memory.value.frame===lio.value.frame&&Math.abs(memory.value.source_stamp-lio.value.stamp)<1}
  function drawMemory(ctx,camera,convert){
   if(!memoryReady())return;
@@ -61,14 +61,19 @@
  }
  function drawLio(){
   const camera=cameras.lio,ctx=context(lioCanvas,camera);if(!ctx)return;
+  if(initialLioHeading===null&&goodLio()){
+   const a=NavGeoAlignment.bodyHeading(lio.value.orientation);
+   if(a!==null){initialLioHeading=a;camera.rotation=Math.PI/2-a}
+  }
   const position=finitePoint(lio?.value.position)?lio.value.position:null;
   if(follow&&position){camera.x=position[0];camera.y=position[1]}
   const target=70/camera.scale,power=10**Math.floor(Math.log10(target));
   const step=[1,2,5,10].map(n=>n*power).find(n=>n>=target)||power*10;
-  const lo=camera.world([0,camera.height]),hi=camera.world([camera.width,0]);
+  const corners=[[0,0],[camera.width,0],[0,camera.height],[camera.width,camera.height]].map(p=>camera.world(p));
+  const lo=[Math.min(...corners.map(p=>p[0])),Math.min(...corners.map(p=>p[1]))],hi=[Math.max(...corners.map(p=>p[0])),Math.max(...corners.map(p=>p[1]))];
   ctx.strokeStyle='#203944';ctx.lineWidth=1;
-  for(let x=Math.ceil(lo[0]/step)*step;x<=hi[0];x+=step){const p=camera.screen([x,0]);ctx.beginPath();ctx.moveTo(p[0],0);ctx.lineTo(p[0],camera.height);ctx.stroke()}
-  for(let y=Math.ceil(lo[1]/step)*step;y<=hi[1];y+=step){const p=camera.screen([0,y]);ctx.beginPath();ctx.moveTo(0,p[1]);ctx.lineTo(camera.width,p[1]);ctx.stroke()}
+  for(let x=Math.ceil(lo[0]/step)*step;x<=hi[0];x+=step){const a=camera.screen([x,lo[1]]),b=camera.screen([x,hi[1]]);ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke()}
+  for(let y=Math.ceil(lo[1]/step)*step;y<=hi[1];y+=step){const a=camera.screen([lo[0],y]),b=camera.screen([hi[0],y]);ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke()}
   const origin=camera.screen([0,0]);ctx.fillStyle='#688a99';ctx.font='11px system-ui';ctx.fillText('LIO起点',origin[0]+8,origin[1]-8);
   drawMemory(ctx,camera,p=>p);
   const selected=memory?.value?.goal||((localGoal&&localGoal.epoch===memory?.value?.epoch)?localGoal.point:null);
@@ -95,7 +100,7 @@
    const p=camera.screen(position),yaw=NavGeoAlignment.bodyHeading(lio.value.orientation);
    if(goodLio()&&yaw!==null){
     // Fixed-size body-forward arrow; canvas Y points down, native LIO Y points up.
-    const c=Math.cos(yaw),s=Math.sin(yaw),shape=[[12,0],[-7,5],[-4,0],[-7,-5]];
+    const c=Math.cos(yaw+camera.rotation),s=Math.sin(yaw+camera.rotation),shape=[[12,0],[-7,5],[-4,0],[-7,-5]];
     ctx.fillStyle='#80eea4';ctx.strokeStyle='#153b35';ctx.lineWidth=1.5;ctx.beginPath();
     shape.forEach(([a,b],i)=>{const x=p[0]+a*c-b*s,y=p[1]-a*s-b*c;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
     ctx.closePath();ctx.fill();ctx.stroke();
@@ -103,7 +108,7 @@
   }
   $('lioHome').textContent=follow?'LIO 跟随中':'跟随 LIO';
  }
- function draw(){drawGps();drawLio();const c=cameras[active],factor=active==='gps'?Math.cos(unproject(c.x,c.y)[1]*Math.PI/180):1;const m=100/c.scale*factor;$('scaleLabel').textContent=`100像素 ≈ ${m>=1?m.toFixed(1)+' m':(m*100).toFixed(1)+' cm'}${active==='gps'?' · 缩放不代表定位精度':''}`}
+ function draw(){drawGps();drawLio();$('viewAxisLabel').textContent=active==='gps'?'Ｎ':'初始前方';const c=cameras[active],factor=active==='gps'?Math.cos(unproject(c.x,c.y)[1]*Math.PI/180):1;const m=100/c.scale*factor;$('scaleLabel').textContent=`100像素 ≈ ${m>=1?m.toFixed(1)+' m':(m*100).toFixed(1)+' cm'}${active==='gps'?' · 缩放不代表定位精度':''}`}
  function setMode(value){mode=value;$('gpsView').classList.toggle('selecting',value!=='pan'&&value!=='lio_goal');$('lioView').classList.toggle('selecting',value==='lio_goal');$('pickGoal').textContent=value==='goal'?'取消选点':'＋ 选择目标'}
  function show(view){active=view;for(const v of ['gps','lio']){$(v+'View').classList.toggle('is-main',v===view);$(v+'View').classList.toggle('is-mini',v!==view)}setMode('pan');$('swapView').textContent=view==='lio'?'切换全局地图':'切换LIO视图';requestAnimationFrame(draw)}
  async function submit(kind,value){try{const r=await fetch('/api/operator/'+kind,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value),signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error(r.status);await r.json();$('operatorResult').textContent=kind==='goal'?'目标已保存；没有道路审核开关。实际执行状态见机器人控制流程。':'方向预览已保存，未修改ROS定位。';notify(kind==='goal'?'目标已保存，执行状态见控制流程':'初始方向预览已保存，未执行');return true}catch(e){$('operatorResult').textContent='保存失败或结果未知：'+e.message;notify('保存失败或结果未知，请重试','error');return false}}
@@ -154,7 +159,7 @@
    reference=response?.samples?.reference||null;navPlan=response?.samples?.plan||null;if(reference&&typeof reference.value==='string'){try{reference={...reference,value:JSON.parse(reference.value)}}catch(e){reference=null}}
    memory=response?.samples?.memory||null;if(memory&&typeof memory.value==='string'){try{memory={...memory,value:JSON.parse(memory.value)}}catch(e){memory=null}}
    const reset=!connected||!lio||lio.value.epoch!==lastEpoch||lio.value.frame!==lastFrame||lio.value.stamp<lastStamp||(lastStamp!==null&&lio.value.stamp-lastStamp>1)||lio.receive_age_sec>=1;
-   if(reset){trajectory=[];if(alignment){alignment=null;notify('LIO中断或坐标重置，旧地理对齐已取消，请静止重新对齐','error')}}
+   if(reset){trajectory=[];initialLioHeading=null;if(alignment){alignment=null;notify('LIO中断或坐标重置，旧地理对齐已取消，请静止重新对齐','error')}}
    lastEpoch=lio?.value.epoch;lastFrame=lio?.value.frame;
    if(cloudStatus&&typeof cloudStatus.value==='string'){try{cloudStatus={...cloudStatus,value:JSON.parse(cloudStatus.value)}}catch(e){cloudStatus=null}}
    receivedAt=performance.now();
