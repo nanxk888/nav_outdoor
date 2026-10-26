@@ -1,5 +1,11 @@
 const assert=require('node:assert/strict');
 const {create}=require('../web/geo_alignment.js'),{project}=require('../web/viewport.js');
+const {horizontalHeading}=require('../web/geo_alignment.js');
+assert.equal(horizontalHeading([0,0,0,1]),0);
+assert(Math.abs(horizontalHeading([0,0,Math.sin(Math.PI/4),Math.cos(Math.PI/4)])-Math.PI/2)<1e-9);
+assert.equal(horizontalHeading([0,Math.sin(Math.PI/12),0,Math.cos(Math.PI/12)]),0);
+assert.equal(horizontalHeading([0,0,0,0]),null);
+assert.equal(horizontalHeading([0,Math.SQRT1_2,0,Math.SQRT1_2]),null);
 const gps={valid:true,longitude:108.83,latitude:34.13,stamp:10};
 const lio={position:[3,4,0],orientation:[0,0,0,1],frame:'lio_odom',stamp:10,epoch:'a'};
 const close=(a,b)=>assert(Math.abs(a-b)<1e-6,`${a} != ${b}`);

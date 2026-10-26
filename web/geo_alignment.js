@@ -1,6 +1,12 @@
 /* Display-only rigid LIO -> local ENU -> Web Mercator. No navigation writes. */
 (function(root){
  const {project}=root.NavViewport||(typeof require==='function'?require('./viewport.js'):{}),rad=Math.PI/180;
+ function horizontalHeading(q){
+  if(!Array.isArray(q)||q.length!==4||!q.every(Number.isFinite))return null;
+  const norm=Math.hypot(...q);if(Math.abs(norm-1)>.01)return null;
+  const [x,y,z,w]=q.map(v=>v/norm),a=1-2*(y*y+z*z),b=2*(x*y+w*z);
+  return Math.hypot(a,b)<.3?null:Math.atan2(b,a);
+ }
  function create(gps,lio,heading,offset=0,lever=[0,0,0]){
   if(!gps.valid||![gps.longitude,gps.latitude,gps.stamp,lio.stamp,heading,offset,...lever,...lio.position,...lio.orientation].every(Number.isFinite))throw Error('需要有效GPS、LIO位姿和数值参数');
   if(Math.abs(gps.latitude)>80||Math.abs(gps.longitude)>180||heading<0||heading>=360||Math.abs(offset)>360||lever.some(v=>Math.abs(v)>5))throw Error('对齐参数超出范围');
@@ -22,5 +28,5 @@
    yaw(q){const [x,y,z,w]=q;return Math.atan2(2*(w*z+x*y),1-2*(y*y+z*z))+rotation}
   };
  }
- const api={create};root.NavGeoAlignment=api;if(typeof module!=='undefined')module.exports=api;
+ const api={create,horizontalHeading};root.NavGeoAlignment=api;if(typeof module!=='undefined')module.exports=api;
 })(globalThis);

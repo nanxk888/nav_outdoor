@@ -91,9 +91,16 @@
   }
   $('cloudHint').textContent=reason;
   ctx.strokeStyle=goodLio()?'#6bdcc6':'#637e86';ctx.lineWidth=2;ctx.beginPath();trajectory.forEach((p,i)=>{const v=camera.screen(p);i?ctx.lineTo(...v):ctx.moveTo(...v)});ctx.stroke();
-  if(position){const p=camera.screen(position);marker(ctx,p,goodLio()?'#80eea4':'#718690',6);
-   const q=lio.value.orientation;
-   if(Array.isArray(q)&&q.length===4&&q.every(Number.isFinite)){const [x,y,z,w]=q,yaw=Math.atan2(2*(w*z+x*y),1-2*(y*y+z*z));ctx.strokeStyle='#a0eed8';ctx.beginPath();ctx.moveTo(...p);ctx.lineTo(p[0]+24*Math.cos(yaw),p[1]-24*Math.sin(yaw));ctx.stroke()}}
+  if(position){
+   const p=camera.screen(position),yaw=NavGeoAlignment.horizontalHeading(lio.value.orientation);
+   if(goodLio()&&yaw!==null){
+    // Fixed-size body-forward arrow; canvas Y points down, native LIO Y points up.
+    const c=Math.cos(yaw),s=Math.sin(yaw),shape=[[12,0],[-7,5],[-4,0],[-7,-5]];
+    ctx.fillStyle='#80eea4';ctx.strokeStyle='#153b35';ctx.lineWidth=1.5;ctx.beginPath();
+    shape.forEach(([a,b],i)=>{const x=p[0]+a*c-b*s,y=p[1]-a*s-b*c;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+    ctx.closePath();ctx.fill();ctx.stroke();
+   }else marker(ctx,p,'#718690',4);
+  }
   $('lioHome').textContent=follow?'LIO 跟随中':'跟随 LIO';
  }
  function draw(){drawGps();drawLio();const c=cameras[active],factor=active==='gps'?Math.cos(unproject(c.x,c.y)[1]*Math.PI/180):1;const m=100/c.scale*factor;$('scaleLabel').textContent=`100像素 ≈ ${m>=1?m.toFixed(1)+' m':(m*100).toFixed(1)+' cm'}${active==='gps'?' · 缩放不代表定位精度':''}`}
