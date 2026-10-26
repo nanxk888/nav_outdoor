@@ -1,12 +1,12 @@
 // Application interaction unit test in a fake DOM; not browser visual QA.
 const assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
-const messages=[],posts=[],els=new Map();let obstacleDraws=0;
+const messages=[],posts=[],els=new Map();let obstacleDraws=0,trajectorySegments=0;
 class Element{
  constructor(id){this.id=id;this.textContent='';this.value='';this.handlers={};this.flags=new Set(id==='lioView'?['is-main']:id==='gpsView'?['is-mini']:[]);this.classList={toggle:(key,on)=>on?this.flags.add(key):this.flags.delete(key)}}
  addEventListener(name,fn){this.handlers[name]=fn}
  setPointerCapture(){}
  getBoundingClientRect(){const main=els.get(this.id==='osm'?'gpsView':'lioView')?.flags.has('is-main');return {left:0,top:0,width:main?1200:300,height:main?800:205}}
- getContext(){return new Proxy({}, {get:(_,key)=>(...args)=>{if(key==='fillRect')obstacleDraws++;if(['arc','moveTo','lineTo','fillRect'].includes(key))assert(args.every(Number.isFinite))}})}
+ getContext(){let segments=0;return new Proxy({}, {get:(target,key)=>key in target?target[key]:(...args)=>{if(key==='beginPath')segments=0;if(key==='lineTo')segments++;if(key==='stroke'&&target.strokeStyle==='#6bdcc6')trajectorySegments=segments;if(key==='fillRect')obstacleDraws++;if(['arc','moveTo','lineTo','fillRect'].includes(key))assert(args.every(Number.isFinite))}})}
 }
 const $=id=>{if(!els.has(id))els.set(id,new Element(id));return els.get(id)};
 $('lioView');$('gpsView');
@@ -62,6 +62,11 @@ async function click(x,y){$('osm').handlers.pointerdown(event(x,y));await $('osm
  assert.equal(scan.gps.value.valid,false,'GPS-free local goal must work without valid GPS');
  await $('resetMemory').onclick();assert.equal(posts.at(-1)[0],'/api/operator/memory_reset');
  assert(messages.at(-1)[0].includes('里程计不重启'));
+ for(let i=1;i<=3;i++){scan.lio.value.stamp=now+i*.1;scan.lio.value.position=[i*.1,0,0];context.NavMaps.update({samples:scan},true)}
+ assert(trajectorySegments>=2,'fixture must contain an old trajectory');
+ const cleared=JSON.parse(scan.memory.value);cleared.epoch='reset-confirmed';cleared.goal=null;cleared.route=null;cleared.cells=[];scan.memory.value=JSON.stringify(cleared);
+ context.NavMaps.update({samples:scan},true);assert.equal(trajectorySegments,0,'backend memory reset must clear browser trajectory');
+ scan.lio.value.stamp=now+.4;context.NavMaps.update({samples:scan},true);assert.equal(trajectorySegments,0,'new trajectory must not connect to old samples');
  assert(!posts.some(p=>p[0].startsWith('/api/control')),'map actions must never start motion');
  console.log('PASS: GPS success/no-fix/stale/disconnect feedback; target selection; drag suppression; heading validation; main/mini swap; no motion requests');
 })().catch(e=>{console.error(e);process.exitCode=1});

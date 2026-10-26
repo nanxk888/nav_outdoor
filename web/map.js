@@ -7,7 +7,7 @@
  let features=[],bounds=null,loadError='',gps=null,lio=null,navCloud=null,cloudStatus=null,online=false,receivedAt=0;
  let active='lio',mode='pan',goal=null,heading=null,follow=true,trajectory=[],lastStamp=null;
  let alignment=null,lastEpoch=null,lastFrame=null,geoFollow=true;
- let memory=null,localGoal=null;
+ let memory=null,localGoal=null,lastMemoryEpoch=null;
  let reference=null,navPlan=null,initialLioHeading=null;
  function memoryReady(){return goodLio()&&memory&&age(memory)<1.5&&memory.value?.ready&&memory.value.frame===lio.value.frame&&Math.abs(memory.value.source_stamp-lio.value.stamp)<1}
  function drawMemory(ctx,camera,convert){
@@ -158,6 +158,12 @@
  window.NavMaps={show,draw,update(response,connected){online=connected;gps=response?.samples?.gps||null;lio=response?.samples?.lio||null;navCloud=response?.samples?.nav_cloud||null;cloudStatus=response?.samples?.cloud_status||null;
    reference=response?.samples?.reference||null;navPlan=response?.samples?.plan||null;if(reference&&typeof reference.value==='string'){try{reference={...reference,value:JSON.parse(reference.value)}}catch(e){reference=null}}
    memory=response?.samples?.memory||null;if(memory&&typeof memory.value==='string'){try{memory={...memory,value:JSON.parse(memory.value)}}catch(e){memory=null}}
+   // A changed backend epoch acknowledges reset (also covers resets from another tab).
+   const memoryEpoch=memory?.value?.epoch;
+   if(memoryEpoch){
+    if(lastMemoryEpoch!==null&&memoryEpoch!==lastMemoryEpoch){trajectory=[];localGoal=null}
+    lastMemoryEpoch=memoryEpoch;
+   }
    const reset=!connected||!lio||lio.value.epoch!==lastEpoch||lio.value.frame!==lastFrame||lio.value.stamp<lastStamp||(lastStamp!==null&&lio.value.stamp-lastStamp>1)||lio.receive_age_sec>=1;
    if(reset){trajectory=[];initialLioHeading=null;if(alignment){alignment=null;notify('LIO中断或坐标重置，旧地理对齐已取消，请静止重新对齐','error')}}
    lastEpoch=lio?.value.epoch;lastFrame=lio?.value.frame;

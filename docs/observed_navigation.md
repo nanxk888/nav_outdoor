@@ -97,6 +97,12 @@ Browser-only alignment is not a substitute for the live ROS registration status.
 
 ## Reset and staged exploration are different from a full connector
 
+The browser also clears its displayed historical LIO trajectory and local preview
+target when the backend memory epoch changes (confirmed reset, including from
+another tab). Clearing is not treated as successful merely because HTTP returned
+202. New trajectory samples accumulate without joining the old trace. The LIO
+estimator origin, geographic alignment and initial-heading-up view are unchanged.
+
 The web “reset LIO observation memory and candidate goal” button clears memory and
 the candidate goal, advances the memory epoch, and discards buffered old scans.
 It does NOT restart/reset the LIO estimator or change the LIO coordinate origin.
