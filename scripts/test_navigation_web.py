@@ -88,7 +88,7 @@ class WebTests(unittest.TestCase):
             with self.post('/api/control/speed_limits',dict(linear_mps=.1,angular_rps=.2)) as r:
                 self.assertEqual(r.status,202)
             with self.assertRaises(HTTPError):
-                self.post('/api/control/speed_limits',dict(linear_mps=.3,angular_rps=.2))
+                self.post('/api/control/speed_limits',dict(linear_mps=1.1,angular_rps=.2))
         self.assertEqual(received,[('speed_limits',dict(linear_mps=.1,angular_rps=.2))])
 
     def test_osm(self):

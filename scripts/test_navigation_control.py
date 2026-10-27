@@ -51,15 +51,15 @@ class ControlTests(unittest.TestCase):
             c=self.instance('NAVIGATING');c.local_mode=local;c.safe=lambda:True
             c.cmd=(.15,.3);c.cmd_time=time.monotonic()
             c.local_run='run';c.local_pub=types.SimpleNamespace(publish=lambda m:None)
-            c.requests.put(('speed_limits',dict(linear_mps=.05,angular_rps=.1)))
+            c.requests.put(('speed_limits',dict(linear_mps=.1,angular_rps=.2)))
             with patch.dict(Control.tick.__globals__,{'String':lambda **k:types.SimpleNamespace(**k)}):c.tick()
             fields=c.sent[-1][1]
-            self.assertAlmostEqual(fields['v'],.05);self.assertAlmostEqual(fields['w'],.1)
+            self.assertAlmostEqual(fields['v'],.1);self.assertAlmostEqual(fields['w'],.2)
             self.assertEqual(c.phase,'NAVIGATING')
 
     def test_speed_settings_do_not_start_stopped_robot(self):
         c=self.instance('STOPPED')
-        c.requests.put(('speed_limits',dict(linear_mps=.07,angular_rps=.2)));c.tick()
+        c.requests.put(('speed_limits',dict(linear_mps=.1,angular_rps=.2)));c.tick()
         self.assertEqual(c.phase,'STOPPED');self.assertEqual(c.sent[-1][0],('hello',))
 
     def test_disabled_without_config(self):

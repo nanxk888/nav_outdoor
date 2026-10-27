@@ -21,11 +21,11 @@ vm.createContext(context);vm.runInContext(fs.readFileSync('web/control.js','utf8
  for(const id of ids)await el(id).onclick();
  assert.deepEqual(posts.map(p=>p[0]),['start','loco','lower','stop','pose','navigate','lio_navigate'].map(k=>'/api/control/'+k));
  assert.equal(posts.length,7,'one request per click');
- el('navLinearSpeed').value='0.08';el('navAngularSpeed').value='0.2';
+ el('navLinearSpeed').value='0.1';el('navAngularSpeed').value='0.2';
  await el('applyNavSpeed').onclick();
  assert.equal(posts[7][0],'/api/control/speed_limits');
- assert.deepEqual(posts[7][1],{linear_mps:.08,angular_rps:.2});
- el('navLinearSpeed').value='0.5';await el('applyNavSpeed').onclick();
+ assert.deepEqual(posts[7][1],{linear_mps:.1,angular_rps:.2});
+ el('navLinearSpeed').value='1.1';await el('applyNavSpeed').onclick();
  assert.equal(posts.length,8,'invalid speed must not be submitted');
  context.window.updateControl({phase:'IDLE',speed_limits:{linear_mps:.08,angular_rps:.2}});
  assert(el('navSpeedState').textContent.includes('0.08'));
