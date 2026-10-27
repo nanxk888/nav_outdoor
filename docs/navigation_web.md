@@ -14,7 +14,7 @@ GPS按钮明确提示：未收到数据、无有效信号、数据过期、网�
 
 ## 统一启动（推荐）
 
-新增 `d1h_nav2/launch/real_workspace.launch.py`，默认一次启动GPS驱动检查器、LIO、96→0 GPS桥接、GPS门控和网页，均无自动运动授权。不启动未验收导航、融合或D1接收器；Livox硬件驱动仍由外部启动。
+`d1h_nav2/launch/real_workspace.launch.py` 现默认管理/复用Livox驱动，检查网络和DDS，确认点云与IMU有效后再启动LIO。GPS桥接、门控、网页独立启动，均无自动运动授权；D1接收器仍外部启动。详见 `livox_unified_startup.md`。
 
 GPS检查器在当前Linux进程可见范围内查找精确脚本名gnss_receiver.py，不会把real_gnss_gate误判为驱动。已有驱动就复用、不终止；没有时读取原项目gnss.yaml的port，USB路径可见后通过原system_exec.sh在Domain96启动原驱动。USB未插好时只报一次缺失并等待，不阻止LIO/网页。自行启动的驱动异常退出不循环重启，报告错误；统一启动不再因此关闭其他模块。Ctrl+C只清理本检查器拥有的子进程组；旧驱动不受影响。旧驱动退出时会再次检查并尝试接管；不要与其他自动管理器竞争，也不要跨容器同时打开同一串口（PID命名空间可能互不可见）。
 

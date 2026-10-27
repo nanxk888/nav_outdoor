@@ -20,7 +20,7 @@ def snapshot(proc=Path('/proc')):
 
 def targets(table,root):
     scripts={str(root/'scripts'/name) for name in
-             ('navigation_web.py','ensure_real_gnss_driver.py','workspace_startup_check.py','start_navigation_when_ready.py')}
+             ('navigation_web.py','ensure_real_gnss_driver.py','ensure_livox_and_lio.py','workspace_startup_check.py','start_navigation_when_ready.py')}
     executables={'lio_odometry','real_gnss','real_cloud_filter','lio_memory','local_navigation','navigation_reference','osm_road_planner',
                  'stable_planner','obstacle_memory','gps_goal_to_enu','pose_goal_to_nav','robot_position_marker'}
     selected=set()
@@ -56,7 +56,7 @@ def main():
             except ProcessLookupError:pass
         deadline=time.monotonic()+wait
         while alive() and time.monotonic()<deadline:time.sleep(.1)
-        if not alive():print('Workspace processes stopped. Livox/external drivers were not targeted.');return
+        if not alive():print('Workspace processes stopped, including owned Livox children. External drivers were not targeted.');return
     raise SystemExit('Some processes remain: '+str(sorted(alive())))
 
 

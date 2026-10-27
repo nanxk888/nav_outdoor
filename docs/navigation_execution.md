@@ -22,7 +22,8 @@ bash scripts/build_real_outdoor.sh
 bash scripts/launch_real_workspace.sh sensor_height_m:=0.46 control_config:=/root/.config/nxk/control.json
 ```
 
-The Livox driver and D1 filter/UDP receiver are still externally managed. Do not
+The D1 filter/UDP receiver remains externally managed. Livox is now guarded by
+the unified launcher (see `livox_unified_startup.md`). Do not
 launch duplicate instances. The height is the actual INITIAL IMU height, not the
 height after standing. No SDK mode is required to start perception or the web UI.
 

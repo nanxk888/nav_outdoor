@@ -45,7 +45,8 @@ bash scripts/launch_real_workspace.sh \
 Ground filtering is now enabled by default. The height is the **actual initial IMU height**,
 not a permanent height assumption: 0.46 m is only appropriate for the measured low stance.
 Override it when initializing in a different stance. Disable with `with_nav_cloud:=false`.
-Livox hardware driver remains externally managed; do not start a duplicate driver.
+Livox is now managed/reused by the unified sensor guard; it waits for both streams
+before LIO. See `livox_unified_startup.md`. Do not start a duplicate driver.
 
 LIO observation memory and candidate-only planning now also start by default
 (`with_memory:=false` disables them). See [observed_navigation.md](observed_navigation.md).

@@ -1,4 +1,4 @@
-"""Workspace bringup with optional guarded GPS driver; Livox driver is external."""
+"""Workspace bringup with isolated Livox readiness + optional GPS management."""
 import os
 import sys
 from pathlib import Path
@@ -71,12 +71,17 @@ def configure(context):
             additional_env={'RMW_IMPLEMENTATION':'rmw_cyclonedds_cpp','CYCLONEDDS_URI':xml.as_uri()},
             name='gps_domain_bridge')
         critical.append(bridge)
-    if enabled('with_lio'):
-        lio=Node(package='d1h_fast_lio',executable='lio_odometry',name='navigation_lio',
-                 arguments=['--ros-args','--log-level',arg('log_level')],
-                 parameters=[os.path.join(get_package_share_directory('d1h_fast_lio'),'config','navigation_lio.yaml'),
-                             {'use_sim_time':False}],output='screen',respawn=False)
-        critical.append(lio)
+    if enabled('with_lio') or enabled('with_livox_driver'):
+        command=[sys.executable,str(root/'scripts/ensure_livox_and_lio.py'),
+                 '--setup',arg('livox_setup'),'--config',arg('livox_config'),
+                 '--xml',str(xml),'--timeout',arg('livox_wait_sec')]
+        if not enabled('with_livox_driver'):command.append('--external-only')
+        if enabled('with_lio'):
+            command.extend(['--lio-command',str(Path(get_package_prefix('d1h_fast_lio'))/'lib/d1h_fast_lio/lio_odometry'),
+                            '--ros-args','--log-level',arg('log_level'),'-r','__node:=navigation_lio',
+                            '--params-file',os.path.join(get_package_share_directory('d1h_fast_lio'),'config','navigation_lio.yaml'),
+                            '-p','use_sim_time:=false'])
+        critical.append(ExecuteProcess(cmd=command,output='screen',name='livox_lio_guard'))
     if enabled('with_gnss_gate'):
         gate=Node(package='d1h_global_localization',executable='real_gnss',name='real_gnss_gate',
                   arguments=['--ros-args','--log-level',arg('log_level')],
@@ -136,6 +141,10 @@ def generate_launch_description():
         DeclareLaunchArgument('gps_driver_config',default_value='/workspace/d1h-autonomy-final/.local/robot/perception/gnss.yaml'),
         DeclareLaunchArgument('with_gps_bridge',default_value='true'),
         DeclareLaunchArgument('with_lio',default_value='true'),
+        DeclareLaunchArgument('with_livox_driver',default_value='true',description='Start Livox if absent; reuse only a matching external driver'),
+        DeclareLaunchArgument('livox_setup',default_value='/workspace/D1h/d1h-autonomy/.local/sensor-driver/install/setup.bash'),
+        DeclareLaunchArgument('livox_config',default_value='/workspace/D1h/d1h-autonomy/.local/sensor-driver/install/livox_ros_driver2/share/livox_ros_driver2/config/MID360_config.json'),
+        DeclareLaunchArgument('livox_wait_sec',default_value='30',description='Wait for live LiDAR/IMU before LIO; failure does not stop web'),
         DeclareLaunchArgument('with_nav_cloud',default_value='true'),
         DeclareLaunchArgument('with_memory',default_value='true'),
         DeclareLaunchArgument('sensor_height_m',default_value='0.46',description='Measured INITIAL Livox IMU height; override if not in verified low stance'),
