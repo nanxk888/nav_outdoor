@@ -2,7 +2,7 @@
 import math
 
 
-def track(position,yaw,goal,points,grid,radius=.6):
+def track(position,yaw,goal,points,grid,radius=.25):
     if not points or len(points)>4000:raise ValueError('Missing/budget-exceeding full path')
     if not all(math.isfinite(v) for p in [position,goal,*points] for v in p[:2]) or not math.isfinite(yaw):raise ValueError('Invalid geometry')
     res,width,height,ox,oy,data=grid

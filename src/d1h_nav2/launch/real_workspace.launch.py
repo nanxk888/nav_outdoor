@@ -93,7 +93,7 @@ def configure(context):
         critical.append(cloud)
     if enabled('with_memory'):
         critical.append(Node(package='d1h_nav2',executable='lio_memory',name='lio_observed_memory',
-            parameters=[{'use_sim_time':False,'footprint_radius_m':.6}],arguments=['--ros-args','--log-level',arg('log_level')],output='screen'))
+            parameters=[{'use_sim_time':False,'footprint_radius_m':.25}],arguments=['--ros-args','--log-level',arg('log_level')],output='screen'))
         critical.append(Node(package='d1h_nav2',executable='local_navigation',name='lio_local_navigation',
             parameters=[{'use_sim_time':False}],arguments=['--ros-args','--log-level',arg('log_level')],output='screen'))
     critical.append(Node(package='d1h_nav2',executable='navigation_reference',name='navigation_reference',

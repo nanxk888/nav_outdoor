@@ -22,7 +22,7 @@ def stamp(msg):return msg.header.stamp.sec*10**9+msg.header.stamp.nanosec
 class LioMemoryNode(Node):
     def __init__(self):
         super().__init__('lio_observed_memory')
-        for k,v in {'resolution_m':.25,'retention_sec':300.,'footprint_radius_m':.5}.items():self.declare_parameter(k,v)
+        for k,v in {'resolution_m':.25,'retention_sec':300.,'footprint_radius_m':.25}.items():self.declare_parameter(k,v)
         self.memory=ObservedMemory(self.get_parameter('resolution_m').value,self.get_parameter('retention_sec').value,
                                    radius=self.get_parameter('footprint_radius_m').value)
         self.bundles={};self.previous=None;self.frame='';self.last_scan=0;self.origin=(0.,0.);self.goal=None

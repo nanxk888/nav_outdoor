@@ -1,4 +1,5 @@
 import sys
+import math
 from pathlib import Path
 import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src/d1h_nav2'))
@@ -30,6 +31,29 @@ class MemoryTests(unittest.TestCase):
         m=self.plane();m.expire(309);self.assertTrue(m.cells)
         m.expire(311);self.assertFalse(m.cells)
         m=self.plane();m.expire(9);self.assertFalse(m.cells)
+    def test_measured_radius_and_exact_smooth_endpoints(self):
+        m=ObservedMemory()
+        self.assertEqual(m.radius,.25)
+        m.cells={(x,y):(0,10.) for x in range(-20,30) for y in range(-20,21)}
+        for y in range(-5,6):m.cells[(4,y)]=(100,10.)
+        start=(.03,.04);goal=(2.1,.02)
+        route=m.route(start,goal,10,False);points=route['points']
+        self.assertFalse(route['partial'])
+        self.assertEqual(points[0],start);self.assertEqual(points[-1],goal)
+        self.assertTrue(any(abs(y)>1.5 for x,y in points))
+        self.assertTrue(all(math.dist(a,b)<=.126 for a,b in zip(points,points[1:])))
+        # Every dense point retains the same conservative circular grid stencil.
+        for p in points:
+            c=m.cell(p)
+            for x in range(-1,2):
+                for y in range(-1,2):
+                    self.assertEqual(m.cells.get((c[0]+x,c[1]+y),(-1,0))[0],0)
+    def test_measured_radius_passes_where_old_radius_does_not(self):
+        cells={(x,y):(0,10.) for x in range(-3,12) for y in range(-1,2)}
+        m=ObservedMemory(radius=.25);m.cells=dict(cells)
+        self.assertFalse(m.route((.125,.125),(2.125,.125),10,False)['partial'])
+        old=ObservedMemory(radius=.6);old.cells=dict(cells)
+        with self.assertRaises(ValueError):old.route((.125,.125),(2.125,.125),10,False)
 
 
 if __name__=='__main__':unittest.main()

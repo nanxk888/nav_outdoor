@@ -29,7 +29,7 @@ def configure(context):
             for key,item in list(value.items()):
                 if key=='robot_base_frame':value[key]='navigation_base'
                 elif key=='sensor_frame':value[key]='navigation_sensor'
-                elif key=='robot_radius':value[key]=.6
+                elif key=='robot_radius':value[key]=.25
                 elif key=='use_sim_time':value[key]=False
                 else:commissioning(item)
         elif isinstance(value,list):

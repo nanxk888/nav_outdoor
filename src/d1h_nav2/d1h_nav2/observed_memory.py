@@ -5,8 +5,8 @@ import time
 
 
 class ObservedMemory:
-    def __init__(self,resolution=.25,retention=300.,max_cells=60000,radius=.5):
-        if not .1<=resolution<=1 or not 1<=retention<=600 or not 100<=max_cells<=100000 or not .3<=radius<=1.5:
+    def __init__(self,resolution=.25,retention=300.,max_cells=60000,radius=.25):
+        if not .1<=resolution<=1 or not 1<=retention<=600 or not 100<=max_cells<=100000 or not .25<=radius<=1.5:
             raise ValueError('Invalid bounded memory parameters')
         self.resolution=resolution;self.retention=retention;self.max_cells=max_cells;self.radius=radius
         self.cells={};self.time=None
@@ -77,6 +77,39 @@ class ObservedMemory:
         chain=[best]
         while chain[-1]!=s:chain.append(parent[chain[-1]])
         if len(chain)>4000:raise ValueError('Path point budget exceeded; no candidate released')
-        return {'points':[self.point(c) for c in reversed(chain)],'partial':not reached,
+        points=[self.point(c) for c in reversed(chain)]
+        # Preserve actual endpoints, rather than stopping at a quantized cell centre.
+        points=[tuple(start[:2])]+points+([tuple(goal[:2])] if reached else [])
+        def segment_free(a,b):
+            steps=max(1,math.ceil(math.dist(a,b)/(self.resolution/8)))
+            return all(free(self.cell((a[0]+(b[0]-a[0])*k/steps,
+                                       a[1]+(b[1]-a[1])*k/steps))) for k in range(steps+1))
+        def valid(path):return all(segment_free(a,b) for a,b in zip(path,path[1:]))
+        if not valid(points):raise ValueError('Exact endpoint footprint blocked or unknown')
+        # Remove grid stair-steps locally, then round corners (Chaikin). Never
+        # release a smoothed shortcut unless its swept footprint remains free.
+        simplified=[points[0]];index=0
+        while index<len(points)-1:
+            end=min(index+12,len(points)-1)
+            while end>index+1 and not segment_free(points[index],points[end]):end-=1
+            simplified.append(points[end]);index=end
+        rounded=simplified
+        for _ in range(2):
+            candidate=[rounded[0]]
+            for a,b in zip(rounded,rounded[1:]):
+                candidate.extend([(a[0]*.75+b[0]*.25,a[1]*.75+b[1]*.25),
+                                  (a[0]*.25+b[0]*.75,a[1]*.25+b[1]*.75)])
+            candidate.append(rounded[-1])
+            if valid(candidate):rounded=candidate
+            else:break
+        # Dense samples keep nearest-point tracking meaningful on straight legs.
+        dense=[rounded[0]]
+        for a,b in zip(rounded,rounded[1:]):
+            steps=max(1,math.ceil(math.dist(a,b)/(self.resolution/2)))
+            dense.extend([(a[0]+(b[0]-a[0])*k/steps,a[1]+(b[1]-a[1])*k/steps)
+                          for k in range(1,steps+1)])
+        dense[-1]=rounded[-1]
+        if len(dense)>4000:raise ValueError('Smoothed path point budget exceeded')
+        return {'points':dense,'partial':not reached,'smoothing':'validated_corner_rounding',
                 'reason':'known-free target route' if reached else 'frontier standoff only; goal remains unobserved/unreachable',
                 'expanded':count,'candidate_only':True}
