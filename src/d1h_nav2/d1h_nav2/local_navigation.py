@@ -3,7 +3,16 @@ import math
 from d1h_nav2.footprint import circle_cells
 
 
-def track(position,yaw,goal,points,grid,radius=.25):
+def speed_limits(value):
+    if not isinstance(value,dict) or set(value)!={'linear_mps','angular_rps'}:raise ValueError('Invalid local speed limits')
+    for key,maximum in (('linear_mps',1.),('angular_rps',.5)):
+        v=value[key]
+        if type(v) not in (int,float) or not math.isfinite(v) or not .1<=v<=maximum:raise ValueError('Local speed limits out of range')
+    return dict(value)
+
+
+def track(position,yaw,goal,points,grid,radius=.25,max_linear=.15,max_angular=.35):
+    speed_limits(dict(linear_mps=max_linear,angular_rps=max_angular))
     if not points or len(points)>4000:raise ValueError('Missing/budget-exceeding full path')
     if not all(math.isfinite(v) for p in [position,goal,*points] for v in p[:2]) or not math.isfinite(yaw):raise ValueError('Invalid geometry')
     res,width,height,ox,oy,data=grid
@@ -30,8 +39,9 @@ def track(position,yaw,goal,points,grid,radius=.25):
     distance=math.dist(position,goal)
     if distance<=.15:return 0.,0.,True
     error=math.atan2(math.sin(math.atan2(carrot[1]-position[1],carrot[0]-position[0])-yaw),math.cos(math.atan2(carrot[1]-position[1],carrot[0]-position[0])-yaw))
-    w=max(-.35,min(.35,1.2*error))
-    v=0. if abs(error)>.45 else min(.15,.4*max(0,distance-.1))*max(0,math.cos(error))
+    w=max(-max_angular,min(max_angular,1.2*error))
+    # Distance-based braking envelope (0.5m/s² assumed), not a fixed 0.15m/s cap.
+    v=0. if abs(error)>.45 else min(max_linear,math.sqrt(2*.5*max(0,distance-.15)))*max(0,math.cos(error))
     # Tracking a lookahead must not cut an unchecked shortcut across a corner.
     d=math.dist(position,carrot)
     for k in range(math.ceil(d/(res/2))+1):

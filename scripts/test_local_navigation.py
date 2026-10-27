@@ -34,6 +34,17 @@ class LocalTests(unittest.TestCase):
         g[-1][21*40+21]=100
         v,_,_=track((0,0),math.pi,(-1,0),[(0,0),(-1,0)],g)
         self.assertGreater(v,0)
+    def test_frontend_limits_change_generated_velocity(self):
+        for limit in (.1,.3,.6,1.):
+            v,w,_=track((0,0),0,(2,0),[(0,0),(1,0),(2,0)],self.grid(),max_linear=limit,max_angular=.5)
+            self.assertAlmostEqual(v,limit);self.assertEqual(w,0)
+        v,w,_=track((0,0),math.pi,(2,0),[(0,0),(2,0)],self.grid(),max_linear=1.,max_angular=.5)
+        self.assertEqual(v,0);self.assertAlmostEqual(abs(w),.5)
+        v,_,_=track((1.8,0),0,(2,0),[(0,0),(1,0),(2,0)],self.grid(),max_linear=1.,max_angular=.5)
+        self.assertLess(v,.3)
+    def test_invalid_generated_speed_limit_rejected(self):
+        for v,w in ((1.01,.5),(1.,.51),(.09,.5),(float('nan'),.2)):
+            with self.assertRaises(ValueError):track((0,0),0,(2,0),[(0,0),(2,0)],self.grid(),max_linear=v,max_angular=w)
     def test_retained_path_revalidated_against_new_obstacle(self):
         points=[(0,0),(1,0)]
         cells={(x,y):0 for x in range(-4,9) for y in range(-4,5)}

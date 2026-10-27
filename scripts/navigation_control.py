@@ -177,7 +177,7 @@ class Control:
                 self.stop('LIO local '+s['state']+': '+s.get('reason',''));return
             if s.get('state')=='ACTIVE' and self.safe():
                 v,w=velocity(s['v'],s['w'])
-                if v>.150001 or abs(w)>.350001:raise ValueError('Local velocity exceeds first-stage limits')
+                if v>1.000001 or abs(w)>.500001:raise ValueError('Local velocity exceeds configured protocol envelope')
                 if self.phase=='GOAL_PENDING':self.transition('NAVIGATING','LIO full-path execution accepted')
                 self.cmd=(v,w);self.cmd_time=time.monotonic()
         except (ValueError,TypeError,KeyError):
@@ -200,7 +200,7 @@ class Control:
             self.deferred_goal=dict(value,_local=True);self.browser=time.monotonic();self.session=secrets.token_hex(16)
             self.transition('ARMING','Attach to manual loco for GPS-free LIO navigation');return
         self.local_run=secrets.token_hex(16);self.cmd=(0.,0.);self.cmd_time=0.;self.pending=False
-        self.local_pub.publish(String(data=json.dumps(dict(kind='start',run_id=self.local_run,epoch=value['epoch'],goal=value['goal'],request_time=time.time()))))
+        self.local_pub.publish(String(data=json.dumps(dict(kind='start',run_id=self.local_run,epoch=value['epoch'],goal=value['goal'],request_time=time.time(),speed_limits=getattr(self,'speed_limits',DEFAULT_LIMITS)))))
         self.transition('GOAL_PENDING','Waiting for LIO executor acknowledgement')
 
     def tick(self):
@@ -306,7 +306,7 @@ class Control:
             elif self.phase in ('READY','GOAL_PENDING','NAVIGATING'):
                 if self.robot.get('fsm') != 'loco': self.stop('Unexpected FSM'); return
                 if getattr(self,'local_mode',False) and self.phase in ('GOAL_PENDING','NAVIGATING'):
-                    self.local_pub.publish(String(data=json.dumps(dict(kind='heartbeat',run_id=self.local_run,request_time=time.time()))))
+                    self.local_pub.publish(String(data=json.dumps(dict(kind='heartbeat',run_id=self.local_run,request_time=time.time(),speed_limits=getattr(self,'speed_limits',DEFAULT_LIMITS)))))
                 if self.phase in ('GOAL_PENDING','NAVIGATING') and not self.safe():
                     self.stop('Localization/perception not safe: '+str(self.local_state.get('reason','') if getattr(self,'local_mode',False) else self.safety.get('reason',''))); return
                 if self.phase == 'NAVIGATING':

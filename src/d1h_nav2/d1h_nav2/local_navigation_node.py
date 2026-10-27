@@ -7,7 +7,7 @@ from rclpy.node import Node
 from nav_msgs.msg import Odometry,OccupancyGrid
 from std_msgs.msg import String
 from d1h_nav2.navigation_reference import body_heading
-from d1h_nav2.local_navigation import track
+from d1h_nav2.local_navigation import track,speed_limits
 from d1h_nav2.ground_health import require_ground
 
 
@@ -15,6 +15,7 @@ class LocalNavigation(Node):
     def __init__(self):
         super().__init__('lio_local_navigation')
         self.odom=None;self.memory={};self.ground={};self.grid=None;self.rx={}
+        self.speed_limits=dict(linear_mps=.15,angular_rps=.35)
         self.run_id=None;self.target=None;self.path=None;self.epoch=None;self.state='IDLE';self.reason='Waiting for full local path'
         self.started=0.;self.last_request=0.;self.lease_rx=-math.inf
         self.pub=self.create_publisher(String,'/navigation/local_execution/status',5)
@@ -69,7 +70,8 @@ class LocalNavigation(Node):
         i=self.grid.info;o=i.origin
         if abs(o.orientation.w-1)>1e-6 or abs(o.orientation.x)+abs(o.orientation.y)+abs(o.orientation.z)>1e-6:raise ValueError('Nonplanar grid origin')
         points=self.path if self.state=='ACTIVE' else r['points']
-        v,w,done=track(xyz,yaw,g,points,(i.resolution,i.width,i.height,o.position.x,o.position.y,self.grid.data))
+        v,w,done=track(xyz,yaw,g,points,(i.resolution,i.width,i.height,o.position.x,o.position.y,self.grid.data),
+                       max_linear=self.speed_limits['linear_mps'],max_angular=self.speed_limits['angular_rps'])
         return v,w,done,xyz
 
     def request(self,msg):
@@ -79,15 +81,17 @@ class LocalNavigation(Node):
             if r.get('kind')=='heartbeat':
                 t=r.get('request_time')
                 if r.get('run_id')==self.run_id and self.state=='ACTIVE' and type(t) in (int,float) and -.1<=time.time()-t<.3:
+                    if 'speed_limits' in r:self.speed_limits=speed_limits(r['speed_limits'])
                     self.lease_rx=time.monotonic()
                 return
             if r.get('kind')=='stop':
                 if r.get('run_id')==self.run_id and self.state=='ACTIVE':self.state='STOPPED';self.reason='Operator stop'
                 return
-            if set(r)!={'kind','run_id','epoch','goal','request_time'} or r['kind']!='start':raise ValueError('Invalid local request')
+            if set(r)-{'speed_limits'}!={'kind','run_id','epoch','goal','request_time'} or r['kind']!='start':raise ValueError('Invalid local request')
             if type(r['request_time']) not in (int,float) or not -.1<=time.time()-r['request_time']<2 or r['request_time']<=self.last_request:raise ValueError('Stale/replayed local start')
             if not isinstance(r['run_id'],str) or not 16<=len(r['run_id'])<=64:raise ValueError('Invalid run id')
             if self.state=='ACTIVE':raise ValueError('Already active')
+            self.speed_limits=speed_limits(r.get('speed_limits',dict(linear_mps=.15,angular_rps=.35)))
             _,_,_,p=self.inputs()
             if r['epoch']!=self.memory.get('epoch') or r['goal']!=self.memory.get('goal'):raise ValueError('Selected local goal changed')
             if not .15<math.dist(p,r['goal'])<=2.5:raise ValueError('First stage goal must be 0.15..2.5m away')
@@ -117,7 +121,7 @@ class LocalNavigation(Node):
             elif self.state=='READY':self.state='IDLE'
         self.pub.publish(String(data=json.dumps(dict(stamp=self.get_clock().now().nanoseconds/1e9,ready=ready,
             state=self.state,reason=self.reason,run_id=self.run_id,epoch=self.memory.get('epoch'),goal=self.memory.get('goal'),
-            v=v,w=w,gps_required=False))))
+            v=v,w=w,speed_limits=self.speed_limits,gps_required=False))))
 
 
 def main():
