@@ -29,12 +29,20 @@ def configure(context):
             for key,item in list(value.items()):
                 if key=='robot_base_frame':value[key]='navigation_base'
                 elif key=='sensor_frame':value[key]='navigation_sensor'
-                elif key=='robot_radius':value[key]=.25
+                elif key=='robot_radius':value[key]=.25;value['footprint_padding']=0.
                 elif key=='use_sim_time':value[key]=False
                 else:commissioning(item)
         elif isinstance(value,list):
             for item in value:commissioning(item)
     commissioning(real_nav);commissioning(local)
+    # Physical circular footprint is measured; do not silently add Nav2's
+    # default footprint padding. Inflation remains a separate path cost.
+    for config in (real_nav,local):
+        for name in ('global_costmap','local_costmap'):
+            if name in config:
+                params=config[name][name]['ros__parameters']
+                params['robot_radius']=.25
+                params['footprint_padding']=0.
     real_nav['bt_navigator']['ros__parameters']['default_nav_through_poses_bt_xml']=''
     follower=real_nav['controller_server']['ros__parameters']['FollowPath']
     follower['desired_linear_vel']=.2;follower['rotate_to_heading_angular_vel']=.4

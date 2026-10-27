@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src/d1h_nav2'))
 from d1h_nav2.local_navigation import track
 from d1h_nav2.navigation_reference import body_heading
+from d1h_nav2.footprint import path_free
 
 
 class LocalTests(unittest.TestCase):
@@ -27,6 +28,18 @@ class LocalTests(unittest.TestCase):
     def test_corrected_robot_front_is_native_minus_x(self):
         v,w,_=track((0,0),body_heading((0,0,0,1)),(-1,0),[(0,0),(-.5,0),(-1,0)],self.grid())
         self.assertGreater(v,0);self.assertAlmostEqual(w,0)
+    def test_current_circle_does_not_use_extra_square_margin(self):
+        g=self.grid()
+        # Outside radius .25 at this exact pose; old padded stencil rejected it.
+        g[-1][21*40+21]=100
+        v,_,_=track((0,0),math.pi,(-1,0),[(0,0),(-1,0)],g)
+        self.assertGreater(v,0)
+    def test_retained_path_revalidated_against_new_obstacle(self):
+        points=[(0,0),(1,0)]
+        cells={(x,y):0 for x in range(-4,9) for y in range(-4,5)}
+        self.assertTrue(path_free(points,.25,.25,lambda c:cells.get(c,-1)==0))
+        cells[(2,0)]=100
+        self.assertFalse(path_free(points,.25,.25,lambda c:cells.get(c,-1)==0))
 
 
 if __name__=='__main__':unittest.main()

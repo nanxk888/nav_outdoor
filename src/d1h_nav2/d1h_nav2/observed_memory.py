@@ -2,6 +2,7 @@
 import heapq
 import math
 import time
+from d1h_nav2.footprint import circle_cells,path_free
 
 
 class ObservedMemory:
@@ -44,14 +45,15 @@ class ObservedMemory:
     def route(self,start,goal,now,explore=True,max_expand=20000):
         self.expire(now);s=self.cell(start);g=self.cell(goal)
         r=math.ceil(self.radius/self.resolution)
-        offsets=[(x,y) for x in range(-r,r+1) for y in range(-r,r+1)
-                 if math.hypot(x,y)*self.resolution<=self.radius+self.resolution*.71]
         cache={}
         def free(c):
             if c not in cache:
-                cache[c]=all(self.cells.get((c[0]+x,c[1]+y),(-1,0))[0]==0 for x,y in offsets)
+                cache[c]=all(self.cells.get(k,(-1,0))[0]==0 for k in circle_cells(self.point(c),self.resolution,self.radius))
             return cache[c]
-        if not free(s):raise ValueError('Robot footprint is not fully observed free; stop and observe')
+        bad=[(c,self.cells.get(c,(-1,0))[0]) for c in circle_cells(start,self.resolution,self.radius)
+             if self.cells.get(c,(-1,0))[0]!=0]
+        if bad:raise ValueError('Start footprint blocked: radius=%.2fm unknown=%d occupied=%d cells=%s' %
+                               (self.radius,sum(v<0 for _,v in bad),sum(v>0 for _,v in bad),bad))
         queue=[(math.dist(s,g),0.,s)];costs={s:0.};parent={};best=None;best_score=math.inf
         count=0;reached=False;deadline=time.monotonic()+.2
         while queue and count<max_expand:
@@ -81,9 +83,7 @@ class ObservedMemory:
         # Preserve actual endpoints, rather than stopping at a quantized cell centre.
         points=[tuple(start[:2])]+points+([tuple(goal[:2])] if reached else [])
         def segment_free(a,b):
-            steps=max(1,math.ceil(math.dist(a,b)/(self.resolution/8)))
-            return all(free(self.cell((a[0]+(b[0]-a[0])*k/steps,
-                                       a[1]+(b[1]-a[1])*k/steps))) for k in range(steps+1))
+            return path_free([a,b],self.resolution,self.radius,lambda c:self.cells.get(c,(-1,0))[0]==0)
         def valid(path):return all(segment_free(a,b) for a,b in zip(path,path[1:]))
         if not valid(points):raise ValueError('Exact endpoint footprint blocked or unknown')
         # Remove grid stair-steps locally, then round corners (Chaikin). Never

@@ -4,6 +4,7 @@ from pathlib import Path
 import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src/d1h_nav2'))
 from d1h_nav2.observed_memory import ObservedMemory
+from d1h_nav2.footprint import circle_cells
 
 
 class MemoryTests(unittest.TestCase):
@@ -44,10 +45,14 @@ class MemoryTests(unittest.TestCase):
         self.assertTrue(all(math.dist(a,b)<=.126 for a,b in zip(points,points[1:])))
         # Every dense point retains the same conservative circular grid stencil.
         for p in points:
-            c=m.cell(p)
-            for x in range(-1,2):
-                for y in range(-1,2):
-                    self.assertEqual(m.cells.get((c[0]+x,c[1]+y),(-1,0))[0],0)
+            for c in circle_cells(p,m.resolution,m.radius):
+                self.assertEqual(m.cells.get(c,(-1,0))[0],0)
+    def test_exact_circle_has_no_extra_cell_margin(self):
+        cells=set(circle_cells((.125,.125),.25,.25))
+        self.assertNotIn((2,0),cells)
+        self.assertIn((0,0),cells)
+        self.assertNotIn((2,2),cells)
+        self.assertEqual(set(circle_cells((0,0),.25,.25)),{(-1,-1),(-1,0),(0,-1),(0,0)})
     def test_measured_radius_passes_where_old_radius_does_not(self):
         cells={(x,y):(0,10.) for x in range(-3,12) for y in range(-1,2)}
         m=ObservedMemory(radius=.25);m.cells=dict(cells)

@@ -1,5 +1,6 @@
 """Bounded first-stage LIO tracking. Unknown cells are not traversable."""
 import math
+from d1h_nav2.footprint import circle_cells
 
 
 def track(position,yaw,goal,points,grid,radius=.25):
@@ -7,11 +8,9 @@ def track(position,yaw,goal,points,grid,radius=.25):
     if not all(math.isfinite(v) for p in [position,goal,*points] for v in p[:2]) or not math.isfinite(yaw):raise ValueError('Invalid geometry')
     res,width,height,ox,oy,data=grid
     if not .1<=res<=1 or width*height!=len(data):raise ValueError('Invalid observed grid')
-    n=math.ceil((radius+res*.71)/res)
-    stencil=[(i,j) for i in range(-n,n+1) for j in range(-n,n+1) if math.hypot(i,j)*res<=radius+res*.71]
     def free(p):
-        cx,cy=math.floor((p[0]-ox)/res),math.floor((p[1]-oy)/res)
-        return all(0<=cx+i<width and 0<=cy+j<height and data[(cy+j)*width+cx+i]==0 for i,j in stencil)
+        return all(0<=i<width and 0<=j<height and data[j*width+i]==0
+                   for i,j in circle_cells(p,res,radius,(ox,oy)))
     if not free(position):raise ValueError('Current footprint not observed free')
     nearest=min(range(len(points)),key=lambda i:math.dist(position,points[i]))
     if math.dist(position,points[nearest])>.4:raise ValueError('Robot deviated from path')

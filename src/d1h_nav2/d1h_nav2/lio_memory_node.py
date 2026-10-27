@@ -14,6 +14,7 @@ from nav_msgs.msg import Odometry,OccupancyGrid,Path
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import String
 from d1h_nav2.observed_memory import ObservedMemory
+from d1h_nav2.footprint import path_free
 
 
 def stamp(msg):return msg.header.stamp.sec*10**9+msg.header.stamp.nanosec
@@ -26,6 +27,7 @@ class LioMemoryNode(Node):
         self.memory=ObservedMemory(self.get_parameter('resolution_m').value,self.get_parameter('retention_sec').value,
                                    radius=self.get_parameter('footprint_radius_m').value)
         self.bundles={};self.previous=None;self.frame='';self.last_scan=0;self.origin=(0.,0.);self.goal=None
+        self.saved_route=None
         self.epoch=uuid.uuid4().hex;self.reason='waiting for exact-time LIO + nav + clear'
         self.ground={};self.ground_rx=-math.inf;self.scan_rx=-math.inf
         self.status=self.create_publisher(String,'/navigation/memory/status',1)
@@ -44,6 +46,7 @@ class LioMemoryNode(Node):
         while len(self.bundles)>15:self.bundles.pop(next(iter(self.bundles)))
 
     def reset(self):
+        self.saved_route=None
         self.memory.cells.clear();self.memory.time=None;self.goal=None;self.bundles.clear();self.last_scan=0
         self.scan_rx=-math.inf
         self.epoch=uuid.uuid4().hex;self.reason='LIO reset/gap: memory and goal cleared'
@@ -82,6 +85,7 @@ class LioMemoryNode(Node):
             if not self.ready() or goal['frame']!=self.frame or goal['epoch']!=self.epoch:raise ValueError('Stale/mismatched memory epoch')
             if any(type(goal[k]) not in (int,float) or not math.isfinite(goal[k]) for k in ('x','y','request_time')):raise ValueError('Invalid goal numbers')
             if not -.1<=time.time()-goal['request_time']<=3 or math.dist(self.origin,(goal['x'],goal['y']))>100:raise ValueError('Stale/too distant goal')
+            self.saved_route=None
             self.goal=(goal['x'],goal['y'],time.monotonic());self.reason='memory goal accepted for candidate planning only'
         except (ValueError,TypeError,KeyError) as exc:self.reason='Goal rejected: '+str(exc)
 
@@ -109,7 +113,19 @@ class LioMemoryNode(Node):
         ready=self.ready();route=None
         if self.goal and time.monotonic()-self.goal[2]>300:self.goal=None
         if ready and self.goal:
-            try:route=self.memory.route(self.origin,self.goal[:2],now)
+            # Keep a complete route only while its remaining swept footprint is
+            # still free in the latest map. A transient replan cannot erase it.
+            if self.saved_route:
+                points=self.saved_route['points']
+                index=min(range(len(points)),key=lambda i:math.dist(self.origin,points[i]))
+                remaining=[self.origin]+points[index:]
+                if math.dist(self.origin,points[index])<=.4 and path_free(remaining,self.memory.resolution,self.memory.radius,
+                        lambda c:self.memory.cells.get(c,(-1,0))[0]==0):
+                    route=dict(self.saved_route,points=remaining)
+                else:self.saved_route=None
+            try:
+                if route is None:route=self.memory.route(self.origin,self.goal[:2],now)
+                if route and route['partial'] is False:self.saved_route=route
             except ValueError as exc:self.reason=str(exc)
         path=Path();path.header.frame_id=self.frame;path.header.stamp=self.get_clock().now().to_msg()
         if route:
@@ -122,6 +138,7 @@ class LioMemoryNode(Node):
         self.status.publish(String(data=json.dumps({'ready':ready,'frame':self.frame,'epoch':self.epoch,
             'source_stamp':self.last_scan/1e9,'resolution_m':self.memory.resolution,'cells':view,
             'cell_count':len(cells),'retention_sec':self.memory.retention,'goal':self.goal[:2] if self.goal else None,
+            'footprint_radius_m':self.memory.radius,
             'route':route,'reason':self.reason,'candidate_only':True,'base_link_ready':False,
             'scope':'planar visibility memory; no pit/terrain guarantee; no motor output'})))
 

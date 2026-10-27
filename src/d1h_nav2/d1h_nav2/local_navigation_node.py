@@ -58,8 +58,10 @@ class LocalNavigation(Node):
         if not fresh('grid',1.) or self.grid is None or not -.05<=age(self.grid)<1. or self.grid.header.frame_id!='lio_odom':raise ValueError('Observed grid stale/mismatched')
         if abs(m['source_stamp']-(self.grid.header.stamp.sec+self.grid.header.stamp.nanosec/1e9))>.3:raise ValueError('Grid/memory source mismatch')
         g=m.get('goal');r=m.get('route')
-        if not isinstance(g,list) or len(g)!=2 or not isinstance(r,dict) or r.get('partial') is not False or not isinstance(r.get('points'),list) or not r['points']:
-            raise ValueError('Complete path required; partial frontier is preview only')
+        if not isinstance(g,list) or len(g)!=2:
+            raise ValueError('No selected LIO goal')
+        if self.state!='ACTIVE' and (not isinstance(r,dict) or r.get('partial') is not False or not isinstance(r.get('points'),list) or not r['points']):
+            raise ValueError('Full path unavailable: '+str(m.get('reason','partial frontier is preview only')))
         if self.state=='ACTIVE' and (m.get('epoch')!=self.epoch or list(g)!=list(self.target)):raise ValueError('Memory reset or selected goal changed')
         p=self.odom.pose.pose.position;q=self.odom.pose.pose.orientation
         xyz=(p.x,p.y);yaw=body_heading((q.x,q.y,q.z,q.w))
