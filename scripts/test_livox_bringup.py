@@ -1,15 +1,40 @@
 """Offline guard contracts; no ROS, sensor connections, or process signals."""
 import json
 import os
+import struct
 import tempfile
 from pathlib import Path
 import unittest
 from unittest.mock import patch
 from unittest.mock import Mock
-from ensure_livox_and_lio import drivers,compatible,check_network,SensorGate,stop_child,main
+from ensure_livox_and_lio import drivers,compatible,check_network,SensorGate,stop_child,main,lidar_header
 
 
 class GuardTests(unittest.TestCase):
+    def test_metadata_parser_both_endians_and_alignment(self):
+        for endian,enc in (('<',b'\0\1\0\0'),('>',b'\0\0\0\0')):
+            for frame in ('livox_frame','x','longer_frame_name'):
+                name=frame.encode()+b'\0'
+                body=struct.pack(endian+'iII',100,123,len(name))+name
+                body+=b'\0'*((-len(body))%8)
+                body+=struct.pack(endian+'QIB3sI',100,2,0,b'\0'*3,2)+b'\0'*39
+                self.assertEqual(lidar_header(enc+body),(100+123/1e9,frame,2))
+                with self.assertRaises(ValueError):lidar_header((enc+body)[:-1])
+    def test_metadata_parser_against_actual_ros_serializer(self):
+        try:
+            from rclpy.serialization import serialize_message
+            from livox_ros_driver2.msg import CustomMsg,CustomPoint
+        except ImportError:self.skipTest('Requires ROS Livox type support')
+        for frame in ('livox_frame','x','longer_frame_name'):
+            for n in (1,20000):
+                m=CustomMsg();m.header.frame_id=frame;m.header.stamp.sec=100;m.header.stamp.nanosec=123
+                m.point_num=n;m.points=[CustomPoint()]*n
+                self.assertEqual(lidar_header(serialize_message(m)),(100+123/1e9,frame,n))
+    def test_rejection_diagnostics_do_not_hide_missing_lidar(self):
+        g=SensorGate();g.observe('lidar',100,101,1)
+        self.assertEqual(g.detail(1)['lidar']['count'],0)
+        self.assertIn('stale',g.detail(1)['lidar']['last_reason'])
+        self.assertEqual(g.detail(1)['lidar']['rejected'],1)
     def test_network_failure_never_starts_driver_or_lio(self):
         with tempfile.TemporaryDirectory() as folder:
             xml=Path(folder)/'dds.xml';xml.write_text('<CycloneDDS/>')

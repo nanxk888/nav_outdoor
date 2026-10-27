@@ -15,6 +15,14 @@ real sensor source, 10Hz points, livox_frame and the configured MID360 JSON.
 It sources the driver setup in a child shell and explicitly sets DDS afterward.
 Both streams must have fresh, increasing source stamps for at least one second
 before LIO starts. Default wait is 30 seconds; cached data cannot satisfy readiness.
+The guard subscribes to serialized CustomMsg with depth 1 and reads only bounded
+CDR1 metadata (stamp/frame/count/payload size). It does not instantiate thousands
+of Python point objects. IMU keeps a typed depth-1 subscription. Publisher graph
+checks run at 2Hz, not for every IMU sample. Every 5 seconds the wait log includes
+received/rejected counts, source age and rejection reason for both streams.
+Unsupported serialization formats fail explicitly; LIO still performs full scan
+validation. Tests compare metadata parsing against ROS's actual CustomMsg
+serializer, including 20k-point messages, and exercise raw ROS loopback reception.
 
 ```bash
 bash scripts/launch_real_workspace.sh \

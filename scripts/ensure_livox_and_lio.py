@@ -5,6 +5,7 @@ import math
 import os
 from pathlib import Path
 import signal
+import struct
 import subprocess
 import time
 
@@ -50,15 +51,48 @@ def check_network(config):
     print(f'[READY] Livox network: {owners[0]["ifname"]} {address} -> {target}',flush=True)
 
 
+def lidar_header(raw):
+    """Read bounded CDR1 CustomMsg metadata without 20k Python point objects.
+
+    Header, uint64 timebase, uint32 point_num, uint8 lidar_id, uint8[3]
+    reserved, sequence<CustomPoint>. CDR alignment is relative to encapsulation.
+    Unsupported encodings fail explicitly, never count as live sensor data.
+    """
+    if len(raw)<16 or raw[:2] not in (b'\x00\x01',b'\x00\x00'):raise ValueError('Unsupported/truncated CustomMsg CDR1')
+    endian='<' if raw[1]==1 else '>'
+    sec,nsec,size=struct.unpack_from(endian+'iII',raw,4)
+    if nsec>=1000000000 or not 1<=size<=256 or 16+size>len(raw):raise ValueError('Invalid CustomMsg header')
+    if raw[15+size]!=0:raise ValueError('Invalid CustomMsg frame terminator')
+    frame=raw[16:15+size].decode('utf-8')
+    pos=4+((16+size-4+7)//8)*8
+    if pos+20>len(raw):raise ValueError('Truncated CustomMsg metadata')
+    points=struct.unpack_from(endian+'I',raw,pos+8)[0]
+    count=struct.unpack_from(endian+'I',raw,pos+16)[0]
+    if not 0<points<=100000 or count!=points or len(raw)-(pos+20)<count*20-1:
+        raise ValueError(f'Invalid CustomMsg point counts/payload: point_num={points} sequence={count}')
+    return sec+nsec/1e9,frame,points
+
+
 class SensorGate:
-    def __init__(self):self.state={}
+    def __init__(self):self.state={};self.stats={}
+    def reject(self,key,reason):
+        self.state.pop(key,None)
+        s=self.stats.setdefault(key,dict(received=0,rejected=0,last_reason=''))
+        s['rejected']+=1;s['last_reason']=reason
     def observe(self,key,stamp,ros,now):
+        s=self.stats.setdefault(key,dict(received=0,rejected=0,last_reason=''))
+        s['received']+=1;s['source_age_sec']=round(ros-stamp,4)
         previous=self.state.get(key)
-        if not -.05<=ros-stamp<.5 or (previous and stamp<=previous[0]):
-            self.state.pop(key,None);return
+        if not -.05<=ros-stamp<.5:
+            self.reject(key,f'source stamp stale/future: age={ros-stamp:.4f}s');return
+        if previous and stamp<=previous[0]:
+            self.reject(key,'source stamp not increasing');return
         first=previous[2] if previous and now-previous[1]<.4 else now
         count=previous[3]+1 if previous and now-previous[1]<.4 else 1
         self.state[key]=(stamp,now,first,count)
+        s['last_reason']='accepted'
+    def detail(self,now):
+        return {key:dict(self.stats.get(key,{}),**(dict(count=self.state[key][3],receive_age=round(now-self.state[key][1],3)) if key in self.state else dict(count=0))) for key in ('lidar','imu')}
     def ready(self,ros,now):
         return all(k in self.state and now-self.state[k][1]<.3 and -.05<=ros-self.state[k][0]<.5
                    and now-self.state[k][2]>=1. and self.state[k][3]>=count
@@ -107,30 +141,38 @@ def main():
             owned=subprocess.Popen(command,start_new_session=True)
             print(f'[STARTED] Owned Livox PID={owned.pid}; Cyclone DDS matches navigation',flush=True)
         import rclpy
-        from rclpy.qos import qos_profile_sensor_data
+        from rclpy.qos import QoSProfile,ReliabilityPolicy,DurabilityPolicy
         from sensor_msgs.msg import Imu
         from livox_ros_driver2.msg import CustomMsg
         rclpy.init();node=rclpy.create_node('nxk_livox_startup_guard');gate=SensorGate()
         def received(key,msg):
-            if msg.header.frame_id!='livox_frame':gate.state.pop(key,None);return
-            if key=='lidar' and (msg.point_num<=0 or msg.point_num!=len(msg.points)):
-                gate.state.pop(key,None);return
-            if key=='imu' and not all(math.isfinite(v) for xyz in (msg.linear_acceleration,msg.angular_velocity) for v in (xyz.x,xyz.y,xyz.z)):
-                gate.state.pop(key,None);return
-            stamp=msg.header.stamp.sec+msg.header.stamp.nanosec/1e9
-            gate.observe(key,stamp,node.get_clock().now().nanoseconds/1e9,time.monotonic())
-        subs=[node.create_subscription(CustomMsg,'/livox/lidar',lambda m:received('lidar',m),qos_profile_sensor_data),
-              node.create_subscription(Imu,'/livox/imu',lambda m:received('imu',m),qos_profile_sensor_data)]
+            try:
+                if key=='lidar':stamp,frame,_=lidar_header(msg)
+                else:
+                    stamp=msg.header.stamp.sec+msg.header.stamp.nanosec/1e9;frame=msg.header.frame_id
+                    if not all(math.isfinite(v) for xyz in (msg.linear_acceleration,msg.angular_velocity) for v in (xyz.x,xyz.y,xyz.z)):
+                        raise ValueError('Nonfinite IMU')
+                if frame!='livox_frame':raise ValueError(f'Unexpected frame: {frame!r}')
+                gate.observe(key,stamp,node.get_clock().now().nanoseconds/1e9,time.monotonic())
+            except (ValueError,TypeError,struct.error) as exc:gate.reject(key,str(exc))
+        qos=QoSProfile(depth=1,reliability=ReliabilityPolicy.BEST_EFFORT,durability=DurabilityPolicy.VOLATILE)
+        subs=[node.create_subscription(CustomMsg,'/livox/lidar',lambda m:received('lidar',m),qos,raw=True),
+              node.create_subscription(Imu,'/livox/imu',lambda m:received('imu',m),qos)]
         print('[WAIT] Livox: require fresh, increasing LiDAR + IMU for 1s before LIO',flush=True)
-        deadline=time.monotonic()+a.timeout
+        deadline=time.monotonic()+a.timeout;graph_check=0.;report_at=time.monotonic()+5
         while rclpy.ok():
             rclpy.spin_once(node,timeout_sec=.05)
             if owned is not None and owned.poll() is not None:raise ValueError(f'Owned Livox exited: code={owned.returncode}')
             if existing and not Path(f'/proc/{existing[0][0]}').exists():raise ValueError('External Livox exited; no automatic replacement')
-            if any(len(node.get_publishers_info_by_topic(t))>1 for t in ('/livox/lidar','/livox/imu')):raise ValueError('Multiple sensor publishers; LIO not started')
+            if time.monotonic()>=graph_check:
+                if any(len(node.get_publishers_info_by_topic(t))>1 for t in ('/livox/lidar','/livox/imu')):raise ValueError('Multiple sensor publishers; LIO not started')
+                graph_check=time.monotonic()+.5
             if gate.ready(node.get_clock().now().nanoseconds/1e9,time.monotonic()):break
+            if time.monotonic()>=report_at:
+                print('[WAIT] Livox sensor diagnostics: '+str(gate.detail(time.monotonic())),flush=True)
+                report_at=time.monotonic()+5
             if time.monotonic()>deadline:
-                detail={k:dict(count=v[3],receive_age=round(time.monotonic()-v[1],3)) for k,v in gate.state.items()}
+                detail=gate.detail(time.monotonic())
                 raise ValueError(f'Livox sensor readiness timed out: {detail}; inspect DDS/stamps/driver. LIO not started')
         print('[READY] Livox: both streams fresh and advancing',flush=True)
         if a.lio_command:
