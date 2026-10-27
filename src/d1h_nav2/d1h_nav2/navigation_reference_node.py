@@ -19,6 +19,7 @@ from geometry_msgs.msg import TransformStamped
 from tf2_ros import TransformBroadcaster
 from d1h_nav2.navigation_reference import body_heading as heading,registration
 from d1h_nav2.osm_roads import project
+from d1h_nav2.ground_health import require_ground
 
 
 def stamp(msg):return msg.header.stamp.sec+msg.header.stamp.nanosec/1e9
@@ -137,14 +138,18 @@ class NavigationReference(Node):
         now=time.monotonic();pose=self.fresh_pose()
         if not pose and self.anchor is not None:
             self.anchor=None;self.epoch=uuid.uuid4().hex;self.reason='LIO expired: registration discarded; register again'
-        age=self.cloud.get('measurement_age_sec')
-        cloud=now-self.cloud_rx<.6 and self.cloud.get('ready') is True and type(age) in (int,float) and -.05<=age<.5
+        cloud_reason=''
+        try:require_ground(self.cloud,now-self.cloud_rx);cloud=True
+        except ValueError as exc:cloud=False;cloud_reason=str(exc)
         t=self.memory.get('source_stamp')
         memory=now-self.memory_rx<1 and self.memory.get('ready') is True and self.memory.get('frame')=='lio_odom' and type(t) in (int,float) and -.05<=self.get_clock().now().nanoseconds/1e9-t<1.
         ready=pose and cloud and memory and self.anchor is not None
+        health_reason=('LIO pose stale' if not pose else cloud_reason if not cloud else
+                       'Observed memory stale/unavailable' if not memory else
+                       'Waiting for GPS + heading registration' if self.anchor is None else self.reason)
         self.status.publish(String(data=json.dumps(dict(stamp=self.get_clock().now().nanoseconds/1e9,
             navigation_ready=ready,navigation_base_ready=pose,base_link_ready=False,map_alignment_verified=self.anchor is not None,
-            reference_epoch=self.epoch,registered=self.anchor is not None,reason=self.reason,
+            reference_epoch=self.epoch,registered=self.anchor is not None,reason=health_reason,
             datum_latitude_deg=self.datum[0],datum_longitude_deg=self.datum[1],reference_frame='navigation_base',
             model='virtual ground-projected IMU; robot forward opposite IMU +X (180 deg field correction); not vendor base_link',
             anchor_kind='GPS + manual initial bearing, not continuous fusion'))))

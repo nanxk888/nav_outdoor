@@ -46,6 +46,22 @@ class ControlTests(unittest.TestCase):
         c=self.instance('IDLE');c.battery_query_time-=61;c.tick();c.tick()
         self.assertEqual(sum(args==('battery',) for args,_ in c.sent),1)
 
+    def test_shared_speed_limits_applied_before_udp_in_both_modes(self):
+        for local in (False,True):
+            c=self.instance('NAVIGATING');c.local_mode=local;c.safe=lambda:True
+            c.cmd=(.15,.3);c.cmd_time=time.monotonic()
+            c.local_run='run';c.local_pub=types.SimpleNamespace(publish=lambda m:None)
+            c.requests.put(('speed_limits',dict(linear_mps=.05,angular_rps=.1)))
+            with patch.dict(Control.tick.__globals__,{'String':lambda **k:types.SimpleNamespace(**k)}):c.tick()
+            fields=c.sent[-1][1]
+            self.assertAlmostEqual(fields['v'],.05);self.assertAlmostEqual(fields['w'],.1)
+            self.assertEqual(c.phase,'NAVIGATING')
+
+    def test_speed_settings_do_not_start_stopped_robot(self):
+        c=self.instance('STOPPED')
+        c.requests.put(('speed_limits',dict(linear_mps=.07,angular_rps=.2)));c.tick()
+        self.assertEqual(c.phase,'STOPPED');self.assertEqual(c.sent[-1][0],('hello',))
+
     def test_disabled_without_config(self):
         with patch.dict(os.environ,{},clear=True): c=Control(object())
         self.assertEqual(c.phase,'DISABLED')

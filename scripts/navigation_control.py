@@ -13,6 +13,7 @@ from nav2_msgs.action import NavigateToPose
 from rclpy.action import ActionClient
 from robot_wire import encode, decode, velocity
 from robot_policy import posture
+from navigation_speed import DEFAULT_LIMITS,validate_limits,limit_velocity
 
 
 class Control:
@@ -26,6 +27,7 @@ class Control:
         self.goal_handle = None; self.pending = False; self.generation = 0
         self.config = None; self.sock = None
         self.pose = None
+        self.speed_limits=dict(DEFAULT_LIMITS)
         self.batteries={};self.battery_time=0.;self.battery_query_time=-100.
         filename = os.environ.get('NXK_CONTROL_CONFIG')
         if not filename: return
@@ -224,6 +226,8 @@ class Control:
                 except queue.Empty: break
                 try:
                     if kind == 'heartbeat': self.browser = now
+                    elif kind == 'speed_limits':
+                        self.speed_limits=validate_limits(value)
                     elif kind == 'stop': self.stop('Operator stop')
                     elif kind == 'start':
                         if self.phase not in ('IDLE','STOPPED'): raise ValueError('Already active')
@@ -304,13 +308,14 @@ class Control:
                 if getattr(self,'local_mode',False) and self.phase in ('GOAL_PENDING','NAVIGATING'):
                     self.local_pub.publish(String(data=json.dumps(dict(kind='heartbeat',run_id=self.local_run,request_time=time.time()))))
                 if self.phase in ('GOAL_PENDING','NAVIGATING') and not self.safe():
-                    self.stop('Localization/perception not safe'); return
+                    self.stop('Localization/perception not safe: '+str(self.local_state.get('reason','') if getattr(self,'local_mode',False) else self.safety.get('reason',''))); return
                 if self.phase == 'NAVIGATING':
                     if self.cmd_time and now-self.cmd_time>.2:
                         self.stop('Navigation velocity timeout'); return
                     if not self.cmd_time and now-self.state_since>2.:
                         self.stop('No navigation velocity'); return
                 fields={'v':self.cmd[0] if self.phase=='NAVIGATING' else 0.,'w':self.cmd[1] if self.phase=='NAVIGATING' else 0.}
+                fields['v'],fields['w']=limit_velocity(fields['v'],fields['w'],getattr(self,'speed_limits',DEFAULT_LIMITS))
                 if self.phase=='READY' and getattr(self,'pose',None) is not None:fields['pose']=self.pose
                 self.send('drive',**fields)
             else: self.send('hello')
@@ -328,6 +333,7 @@ class Control:
 
     def status(self):
         return {'phase': self.phase, 'reason': self.reason, 'navigation_safe': self.safe(),
+                'speed_limits':dict(getattr(self,'speed_limits',DEFAULT_LIMITS)),
                 'robot': self.robot, 'robot_receive_age_sec': time.monotonic()-self.robot_time,
                 'enabled': self.sock is not None,
                 'navigation_mode':'lio_local' if getattr(self,'local_mode',False) else 'geographic',

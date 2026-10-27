@@ -81,6 +81,16 @@ class WebTests(unittest.TestCase):
         for path in ('/','/map.js','/geo_alignment.js','/control.js','/viewport.js','/dashboard.js','/dashboard.css'):
             with urlopen(self.base+path,timeout=2) as r:self.assertGreater(len(r.read()),100)
 
+    def test_shared_speed_endpoint(self):
+        received=[]
+        fake=types.SimpleNamespace(status=lambda:{'enabled':True},enqueue=lambda k,v:received.append((k,v)) or {'queued':True})
+        with patch.object(self.m,'control',fake):
+            with self.post('/api/control/speed_limits',dict(linear_mps=.1,angular_rps=.2)) as r:
+                self.assertEqual(r.status,202)
+            with self.assertRaises(HTTPError):
+                self.post('/api/control/speed_limits',dict(linear_mps=.3,angular_rps=.2))
+        self.assertEqual(received,[('speed_limits',dict(linear_mps=.1,angular_rps=.2))])
+
     def test_osm(self):
         with urlopen(self.base+'/api/osm',timeout=2) as r:data=json.load(r)
         self.assertEqual(data['type'],'FeatureCollection');self.assertGreater(len(data['features']),0)

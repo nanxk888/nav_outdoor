@@ -1,5 +1,13 @@
 let heartbeatEnabled=false,pendingHeartbeat=false;
 const field=id=>document.getElementById(id);
+field('applyNavSpeed').onclick=async()=>{
+ try{
+  const v=Number(field('navLinearSpeed').value),w=Number(field('navAngularSpeed').value);
+  if(!Number.isFinite(v)||!Number.isFinite(w)||v<.01||v>.15||w<.01||w>.35)throw Error('前进范围0.01～0.15 m/s，转向范围0.01～0.35 rad/s');
+  await command('speed_limits',{linear_mps:v,angular_rps:w});
+  field('navSpeedState').textContent='参数已提交，等待下方实际生效值更新';
+ }catch(e){field('navSpeedState').textContent='速度设置失败：'+e.message}
+};
 const controlButtons=['robotStart','robotLoco','robotLower','robotStop','robotPose','robotNavigate','robotLocalNavigate'];
 field('robotNavigate').textContent='开始 OSM 导航';
 field('robotRefresh').onclick=async()=>{try{await command('refresh');heartbeatEnabled=false;field('controlResult').textContent='已请求刷新连接；当前运动会话停止，不自动恢复运动'}catch(e){field('controlResult').textContent='刷新失败：'+e.message}};
@@ -23,6 +31,7 @@ field('robotPose').onclick=async()=>{
  catch(e){field('controlResult').textContent='请求被拒绝或结果未知：'+e.message}
 };
 window.updateControl=s=>{
+ if(s?.speed_limits)field('navSpeedState').textContent=`已生效：前进≤${s.speed_limits.linear_mps} m/s，转向≤${s.speed_limits.angular_rps} rad/s（LIO／室外共用）`;
  field('controlState').textContent=s?JSON.stringify(s,null,2):'网关断开，实际机器人状态未知';
  const batteryAge=s?.battery_receive_age_sec;
  field('robotBattery').textContent=['battery1','battery2'].map((name,i)=>{

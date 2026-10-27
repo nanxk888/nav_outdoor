@@ -172,9 +172,12 @@ class Handler(BaseHTTPRequestHandler):
                 if not control.status().get('enabled'):
                     raise ValueError('Hardware control configuration is disabled')
                 kind = self.path.rsplit('/',1)[-1]
-                if kind not in ('start','stop','heartbeat','navigate','lio_navigate','lower','pose','loco'):
+                if kind not in ('start','stop','heartbeat','navigate','lio_navigate','lower','pose','loco','speed_limits'):
                     raise ValueError('invalid control request')
-                if kind=='pose':
+                if kind=='speed_limits':
+                    from navigation_speed import validate_limits
+                    validate_limits(value)
+                elif kind=='pose':
                     from robot_policy import posture
                     posture(value,allow_height=True)
                 elif kind in ('lower','loco'):
