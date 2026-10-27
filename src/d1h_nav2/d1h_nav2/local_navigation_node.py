@@ -8,6 +8,7 @@ from nav_msgs.msg import Odometry,OccupancyGrid
 from std_msgs.msg import String
 from d1h_nav2.navigation_reference import body_heading
 from d1h_nav2.local_navigation import track
+from d1h_nav2.ground_health import require_ground
 
 
 class LocalNavigation(Node):
@@ -52,7 +53,7 @@ class LocalNavigation(Node):
         def age(msg):return ros-msg.header.stamp.sec-msg.header.stamp.nanosec/1e9
         if not fresh('odom',.4) or self.odom is None or not -.05<=age(self.odom)<.4:raise ValueError('LIO stale')
         if self.odom.header.frame_id!='lio_odom' or self.odom.child_frame_id!='lio_imu':raise ValueError('Unexpected LIO frames')
-        if not fresh('ground',.5) or self.ground.get('ready') is not True or not -.05<=float(self.ground.get('measurement_age_sec',99))+now-self.rx.get('ground',-math.inf)<.5:raise ValueError('Ground filtering unavailable')
+        require_ground(self.ground,now-self.rx.get('ground',-math.inf))
         m=self.memory
         if not fresh('memory',1.) or m.get('ready') is not True or m.get('frame')!='lio_odom' or not -.05<=ros-float(m.get('source_stamp',0))<1.:raise ValueError('Observed memory stale')
         if not fresh('grid',1.) or self.grid is None or not -.05<=age(self.grid)<1. or self.grid.header.frame_id!='lio_odom':raise ValueError('Observed grid stale/mismatched')

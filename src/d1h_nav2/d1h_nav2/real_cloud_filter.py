@@ -9,6 +9,7 @@ from sensor_msgs.msg import PointCloud2,PointField
 from sensor_msgs_py import point_cloud2
 from std_msgs.msg import String
 from d1h_nav2.real_ground import split_ground
+from d1h_nav2.ground_health import STATUS_PERIOD_SEC
 
 
 def stamp_key(msg):return msg.header.stamp.sec*10**9+msg.header.stamp.nanosec
@@ -25,7 +26,7 @@ class RealCloudFilter(Node):
         self.ground_plane=None;self.previous_odom=None;self.estimated_height=None
         self.subs=[self.create_subscription(Odometry,'/navigation/lio/odometry',self.on_odom,10),
                    self.create_subscription(PointCloud2,'/navigation/lio/deskewed_cloud',self.on_cloud,qos_profile_sensor_data)]
-        self.timer=self.create_timer(.5,self.health)
+        self.timer=self.create_timer(STATUS_PERIOD_SEC,self.health)
     def on_odom(self,msg):
         if self.previous_odom is not None:
             old=self.previous_odom;dt=(stamp_key(msg)-stamp_key(old))/1e9
