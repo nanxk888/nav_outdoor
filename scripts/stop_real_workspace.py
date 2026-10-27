@@ -21,7 +21,7 @@ def snapshot(proc=Path('/proc')):
 def targets(table,root):
     scripts={str(root/'scripts'/name) for name in
              ('navigation_web.py','ensure_real_gnss_driver.py','ensure_livox_and_lio.py','workspace_startup_check.py','start_navigation_when_ready.py')}
-    executables={'lio_odometry','real_gnss','real_cloud_filter','lio_memory','local_navigation','navigation_reference','osm_road_planner',
+    executables={'lio_odometry','real_gnss','real_cloud_filter','lio_memory','local_navigation','nav2_speed_sync','navigation_reference','osm_road_planner',
                  'stable_planner','obstacle_memory','gps_goal_to_enu','pose_goal_to_nav','robot_position_marker'}
     selected=set()
     for pid,(_,_,args) in table.items():

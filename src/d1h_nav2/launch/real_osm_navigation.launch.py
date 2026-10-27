@@ -45,9 +45,9 @@ def configure(context):
                 params['footprint_padding']=0.
     real_nav['bt_navigator']['ros__parameters']['default_nav_through_poses_bt_xml']=''
     follower=real_nav['controller_server']['ros__parameters']['FollowPath']
-    follower['desired_linear_vel']=.2;follower['rotate_to_heading_angular_vel']=.4
+    follower['desired_linear_vel']=.15;follower['rotate_to_heading_angular_vel']=.35
     real_nav['controller_server']['ros__parameters']['goal_checker']['yaw_goal_tolerance']=math.pi
-    real_nav['velocity_smoother']['ros__parameters'].update(max_velocity=[.3,0.,.5],min_velocity=[0.,0.,-.5])
+    real_nav['velocity_smoother']['ros__parameters'].update(max_velocity=[.15,0.,.35],min_velocity=[0.,0.,-.35])
     real_nav['behavior_server']['ros__parameters'].update(max_rotational_vel=.4,behavior_plugins=['spin','wait'])
     # Nav clouds are already height-filtered relative to fitted ground, not absolute map z.
     for params in (real_nav['local_costmap']['local_costmap']['ros__parameters'],
@@ -86,13 +86,14 @@ def configure(context):
         f.write(ET.tostring(through.getroot(),encoding='unicode'));through_file=f.name
     params=RewrittenYaml(source_file=nav_file,
         param_rewrites={'use_sim_time':'false','default_nav_to_pose_bt_xml':bt_file,
-                        'default_nav_through_poses_bt_xml':through_file,'desired_linear_vel':'0.2'},convert_types=True)
+                        'default_nav_through_poses_bt_xml':through_file},convert_types=True)
     def cleanup(_context):
         for filename in (local_file,nav_file,bt_file,through_file):
             if os.path.isfile(filename):os.unlink(filename)
         return []
     return [GroupAction([
         RegisterEventHandler(OnShutdown(on_shutdown=[OpaqueFunction(function=cleanup)])),
+        Node(package='d1h_nav2',executable='nav2_speed_sync',name='nav2_speed_sync',output='screen',parameters=[{'use_sim_time':False}]),
         # Never send unvalidated deployment-profile commands to the hardware.
         # Explicit velocity wiring avoids global remaps overriding smoother INPUT.
         Node(package='nav2_controller',executable='controller_server',name='controller_server',parameters=[params],output='screen',

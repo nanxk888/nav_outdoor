@@ -59,8 +59,24 @@ geographic goal; the native LIO memory tool remains a candidate planner only.
 OSM A* -> stable global route -> rolling 5 m local Smac plan with filtered live
 clouds -> regulated pure pursuit -> velocity smoother ->
 `/real_navigation/cmd_vel_candidate` -> web coordinator -> authenticated UDP -> D1
-receiver -> vendor UserCommand. Limits: forward 0..0.3 m/s, yaw +/-0.5 rad/s;
-desired cruise 0.2 m/s. No automatic reverse or mode switching.
+receiver -> vendor UserCommand. Web limits: forward cap 0.1..1 m/s, yaw cap
+0.1..0.5 rad/s (defaults 0.15/0.35). `nav2_speed_sync` applies requested RPP and
+smoother parameters with atomic per-node service acknowledgment and readback.
+The previous fixed 0.2m/s override is removed. Final UDP limits remain independent.
+No automatic reverse or mode switching. These maxima are not hardware-validated.
+
+The coordinator publishes `/navigation/speed_limits`; `nav2_speed_sync` writes
+controller and smoother parameters, then verifies them with GetParameters.
+`/real_navigation/speed_status` reports requested/applied values. Geographic
+starts require a fresh matching acknowledgment. Failed parameter updates or a
+lost synchronizer stop an active geographic session, never auto-resume it; LIO
+execution is independent. During an update the final UDP limiter immediately
+enforces the new ceiling while parameter RPCs complete. Requests are not persisted.
+
+Regression: isolated parameter-server test covers 1m/s limits, reduction, rejection
+and recovery. Real Nav2 + synthetic sensors + authenticated loopback UDP test uses
+0.6m/s, requires output above the former 0.2m/s ceiling and checks the requested
+upper bounds, turning and stop-on-sensor-loss. No physical robot was commanded.
 
 The live reference requires fresh LIO, accepted ground filtering and fresh observed
 memory. Source expiry/discontinuity invalidates GPS registration; re-register after

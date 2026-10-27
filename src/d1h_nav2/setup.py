@@ -29,6 +29,7 @@ setup(
         'lio_memory = d1h_nav2.lio_memory_node:main',
         'navigation_reference = d1h_nav2.navigation_reference_node:main',
         'local_navigation = d1h_nav2.local_navigation_node:main',
+        'nav2_speed_sync = d1h_nav2.nav2_speed_sync:main',
         'pose_goal_to_nav = d1h_nav2.pose_goal_to_nav:main',
         'robot_position_marker = d1h_nav2.robot_position_marker:main',
         'spawn_unknown_obstacle = d1h_nav2.spawn_unknown_obstacle:main',

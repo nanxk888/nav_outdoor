@@ -31,7 +31,7 @@ field('robotPose').onclick=async()=>{
  catch(e){field('controlResult').textContent='请求被拒绝或结果未知：'+e.message}
 };
 window.updateControl=s=>{
- if(s?.speed_limits)field('navSpeedState').textContent=`已生效：前进≤${s.speed_limits.linear_mps} m/s，转向≤${s.speed_limits.angular_rps} rad/s（LIO／室外共用）`;
+ if(s?.speed_limits)field('navSpeedState').textContent=`当前上限：前进≤${s.speed_limits.linear_mps} m/s，转向≤${s.speed_limits.angular_rps} rad/s。室外Nav2：${s.outdoor_speed_verified?'参数已应用并回读确认':s.outdoor_speed?.reason||'未启动／等待同步'}。`;
  field('controlState').textContent=s?JSON.stringify(s,null,2):'网关断开，实际机器人状态未知';
  const batteryAge=s?.battery_receive_age_sec;
  field('robotBattery').textContent=['battery1','battery2'].map((name,i)=>{

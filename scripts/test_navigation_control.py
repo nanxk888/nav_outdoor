@@ -40,6 +40,7 @@ class ControlTests(unittest.TestCase):
         c.goal_handle=None;c.generation=0;c.pending=False;c.seq=0;c.safety={};c.safety_time=0
         c.sent=[];c.send=lambda *args,**kwargs:c.sent.append((args,kwargs))
         c.battery_query_time=time.monotonic()
+        c.outdoor_speed_time=time.monotonic();c.outdoor_speed=dict(stamp=99.9,ready=True,applied=dict(linear_mps=.15,angular_rps=.35))
         return c
 
     def test_battery_queries_once_per_minute(self):
@@ -56,6 +57,19 @@ class ControlTests(unittest.TestCase):
             fields=c.sent[-1][1]
             self.assertAlmostEqual(fields['v'],.1);self.assertAlmostEqual(fields['w'],.2)
             self.assertEqual(c.phase,'NAVIGATING')
+
+    def test_nav2_speed_rejection_stops_outdoor_but_not_local(self):
+        for local in (False,True):
+            c=self.instance('NAVIGATING');c.local_mode=local
+            c.on_speed_status(types.SimpleNamespace(data=json.dumps(dict(state='ERROR',ready=False,reason='parameter rejected'))))
+            self.assertEqual(c.phase,'NAVIGATING' if local else 'STOPPED')
+    def test_outdoor_start_waits_for_matching_speed_ack(self):
+        c=self.instance('IDLE');c.nav=types.SimpleNamespace(server_is_ready=lambda:True)
+        c.robot.update(sdk_enabled=True,interfaces_fresh=True,biped=True)
+        c.safe=lambda:True;c.speed_limits=dict(linear_mps=.6,angular_rps=.5)
+        with self.assertRaisesRegex(ValueError,'speed limits not yet verified'):c.start_goal(dict(latitude=0.,longitude=0.))
+        c.outdoor_speed.update(applied=dict(c.speed_limits))
+        c.start_goal(dict(latitude=0.,longitude=0.));self.assertEqual(c.phase,'ARMING')
 
     def test_speed_settings_do_not_start_stopped_robot(self):
         c=self.instance('STOPPED')

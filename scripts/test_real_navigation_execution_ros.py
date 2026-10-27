@@ -169,20 +169,25 @@ def main():
                         f.cancel();futures.pop(name)
                     if name not in futures and client.service_is_ready():
                         futures[name]=client.call_async(GetState.Request());future_started[name]=time.monotonic()
-                if all(active.get(name)==3 for name in clients):break
+                if all(active.get(name)==3 for name in clients) and control.outdoor_speed_ready():break
             assert all(active.get(name)==3 for name in clients),active
             assert control.nav.server_is_ready()
+            assert control.outdoor_speed_ready(),control.status()
+            control.enqueue('speed_limits',dict(linear_mps=.6,angular_rps=.5))
+            step(.3);deadline=time.monotonic()+6
+            while not control.outdoor_speed_ready() and time.monotonic()<deadline:step(.1)
+            assert control.outdoor_speed_ready(),control.status()
             control.enqueue('navigate',dict(latitude=0.,longitude=3/6378137*180/math.pi))
             deadline=time.monotonic()+20
-            while time.monotonic()<deadline and not any(v>0 for v,w in received):step(.1)
-            assert any(v>0 for v,w in received),(control.status(),active,diagnostics,received[-10:])
+            while time.monotonic()<deadline and not any(v>.21 for v,w in received):step(.1)
+            assert any(v>.21 for v,w in received),(control.status(),active,diagnostics,received[-10:])
             control.enqueue('stop',{});step(.8)
             turn_start=len(received)
             control.enqueue('navigate',dict(latitude=3/6378137*180/math.pi,longitude=0.))
             deadline=time.monotonic()+10
             while time.monotonic()<deadline and not any(w>.01 for v,w in received[turn_start:]):step(.1)
             assert any(w>.01 for v,w in received[turn_start:]),control.status()
-            assert all(0<=v<=.3 and abs(w)<=.5 for v,w in received)
+            assert all(0<=v<=.600001 and abs(w)<=.500001 for v,w in received)
             assert not modes,'Navigation must not auto stand/loco/lower'
             step(.9,False);assert control.phase=='STOPPED',control.status()
             assert not policy.active and policy.command==(0.,0.),'Receiver must stop, not just change web phase'
