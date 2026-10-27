@@ -111,6 +111,10 @@ class WebTests(unittest.TestCase):
         self.assertEqual(sum('open' in a for a,_ in p.groups),1)
         self.assertTrue(all(a.get('name')=='parameters' for a,_ in p.groups))
         self.assertIn('navLinearSpeed',p.groups[1][1])
+        self.assertTrue(set(('pickGoal','pickHeading','robotNavigate','targetSummary','alignGeo')).issubset(p.groups[2][1]))
+        self.assertNotIn('robotFsm',p.groups[0][1])
+        self.assertTrue(set(('robotFsm','controlFlow','robotLoco')).issubset(p.groups[4][1]))
+        self.assertNotIn('class="task-card"',(self.m.ROOT/'web/index.html').read_text(encoding='utf-8'))
         self.assertTrue(any(set(('pickLioGoal','robotLocalNavigate','robotLocalCancel')).issubset(ids) for _,ids in p.groups))
 
     def test_osm(self):

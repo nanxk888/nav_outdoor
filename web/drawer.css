@@ -12,3 +12,25 @@
 .drawer-stop>button{width:100%}
 .drawer-stop p:empty{display:none}
 .drawer-stop p{max-height:90px;overflow:auto;overflow-wrap:anywhere}
+.map-tools{left:18px;top:22px;max-width:140px;flex-direction:column;flex-wrap:nowrap;align-items:stretch;gap:7px}
+.map-tools button{min-height:37px;text-align:center}
+.map-view.is-main .view-heading{left:auto;right:344px;top:24px;max-width:calc(100% - 520px);text-align:right}
+.map-view.is-main .view-heading h1{font-size:18px;margin:5px 0}
+.map-view.is-main .view-heading .eyebrow{font-size:9px}
+.map-view.is-main .view-heading p{font-size:11px}
+.gps-mission{margin-top:18px;padding-top:10px;border-top:1px solid var(--edge)}
+.gps-mission .task-title{align-items:flex-start;flex-direction:column;overflow-wrap:anywhere}
+.gps-mission .task-actions{flex-direction:column}
+.gps-mission .task-actions button{width:100%}
+@media(max-width:800px){
+ .map-tools{left:12px;top:16px;max-width:124px;gap:6px}
+ .map-tools button{font-size:11px;padding:8px;min-height:34px}
+ .map-view.is-main .view-heading{right:218px;left:150px;max-width:none;top:18px}
+ .map-view.is-main .view-heading h1{font-size:15px}
+ .map-view.is-main .view-heading p{font-size:10px}
+}
+@media(max-width:550px){
+ .map-view.is-mini{top:124px;width:160px;height:125px}
+ .map-view.is-main .view-heading{right:14px;left:150px;top:16px}
+ .compass{top:260px}
+}
