@@ -141,7 +141,7 @@ def generate_launch_description():
         DeclareLaunchArgument('gps_driver_config',default_value='/workspace/d1h-autonomy-final/.local/robot/perception/gnss.yaml'),
         DeclareLaunchArgument('with_gps_bridge',default_value='true'),
         DeclareLaunchArgument('with_lio',default_value='true'),
-        DeclareLaunchArgument('with_livox_driver',default_value='true',description='Start Livox if absent; reuse only a matching external driver'),
+        DeclareLaunchArgument('with_livox_driver',default_value='true',description='Start Livox if absent; reuse external driver when actual sensor streams validate'),
         DeclareLaunchArgument('livox_setup',default_value='/workspace/D1h/d1h-autonomy/.local/sensor-driver/install/setup.bash'),
         DeclareLaunchArgument('livox_config',default_value='/workspace/D1h/d1h-autonomy/.local/sensor-driver/install/livox_ros_driver2/share/livox_ros_driver2/config/MID360_config.json'),
         DeclareLaunchArgument('livox_wait_sec',default_value='30',description='Wait for live LiDAR/IMU before LIO; failure does not stop web'),

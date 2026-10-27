@@ -25,12 +25,13 @@ def drivers(proc=Path('/proc'),executable='livox_ros_driver2_node'):
 
 
 def compatible(existing,xml,config):
+    """Return configuration differences for diagnostics, NOT a reuse veto."""
     pid,argv,env=existing
     expected={'ROS_DOMAIN_ID':'0','ROS_LOCALHOST_ONLY':'0','RMW_IMPLEMENTATION':'rmw_cyclonedds_cpp','CYCLONEDDS_URI':Path(xml).resolve().as_uri()}
-    if any(env.get(k)!=v for k,v in expected.items()):
-        raise ValueError(f'Existing Livox PID={pid} DDS environment conflicts; stop/reconfigure it manually. No second driver started.')
+    differences=[key for key,value in expected.items() if env.get(key)!=value]
     if not any(a=='user_config_path:='+str(Path(config).resolve()) for a in argv):
-        raise ValueError(f'Existing Livox PID={pid} configuration path differs; inspect it manually')
+        differences.append('user_config_path')
+    return differences
 
 
 def check_network(config):
@@ -122,14 +123,17 @@ def main():
         if not Path(a.xml).is_file():raise ValueError('Cyclone DDS XML missing')
         if a.lio_command and drivers(executable='lio_odometry'):
             raise ValueError('LIO process already running; stop old workspace before relaunch; no duplicate started')
-        check_network(a.config)
         existing=drivers()
         if len(existing)>1:raise ValueError('Multiple Livox drivers detected; resolve duplicates manually')
         if existing:
-            compatible(existing[0],a.xml,a.config)
-            print(f'[REUSE] External Livox PID={existing[0][0]}; will NOT stop it on shutdown',flush=True)
+            differences=compatible(existing[0],a.xml,a.config)
+            print(f'[REUSE] External Livox PID={existing[0][0]}; validating actual ROS streams; will NOT stop/reconfigure it',flush=True)
+            if differences:print('[INFO] External driver config differs in '+','.join(differences)+'; live data decides reuse, not DDS implementation',flush=True)
+            try:check_network(a.config)
+            except Exception as exc:print('[WARN] Expected Livox network check: '+str(exc)+'; external driver will still be checked by live ROS data',flush=True)
         elif a.external_only:raise ValueError('External-only mode: no Livox driver running')
         else:
+            check_network(a.config)
             setup=Path(a.setup).resolve();exe=setup.parent/'livox_ros_driver2/lib/livox_ros_driver2/livox_ros_driver2_node'
             # Accommodate isolated and merged install prefixes.
             if not exe.is_file():exe=setup.parent/'lib/livox_ros_driver2/livox_ros_driver2_node'
@@ -173,7 +177,9 @@ def main():
                 report_at=time.monotonic()+5
             if time.monotonic()>deadline:
                 detail=gate.detail(time.monotonic())
-                raise ValueError(f'Livox sensor readiness timed out: {detail}; inspect DDS/stamps/driver. LIO not started')
+                external='; external driver left untouched, no replacement started' if existing else ''
+                raise ValueError(f'Livox sensor readiness timed out: {detail}; inspect DDS/stamps/driver. LIO not started'+external)
+        if not rclpy.ok():return 0  # Shutdown while waiting must never start LIO.
         print('[READY] Livox: both streams fresh and advancing',flush=True)
         if a.lio_command:
             lio=subprocess.Popen(a.lio_command,start_new_session=True)
