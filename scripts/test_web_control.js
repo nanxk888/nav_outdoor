@@ -27,6 +27,9 @@ vm.createContext(context);vm.runInContext(fs.readFileSync('web/control.js','utf8
  assert.deepEqual(posts[7][1],{linear_mps:.1,angular_rps:.2});
  el('navLinearSpeed').value='1.1';await el('applyNavSpeed').onclick();
  assert.equal(posts.length,8,'invalid speed must not be submitted');
+ await el('robotLocalCancel').onclick();
+ assert.equal(posts[8][0],'/api/control/stop');
+ assert.deepEqual(posts[8][1],{});
  context.window.updateControl({phase:'IDLE',speed_limits:{linear_mps:.08,angular_rps:.2}});
  assert(el('navSpeedState').textContent.includes('0.08'));
  context.window.updateControl(null);assert(el('robotFsm').textContent.includes('未知'));

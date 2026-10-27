@@ -8,6 +8,7 @@ import struct
 import time
 import types
 import unittest
+from html.parser import HTMLParser
 from unittest.mock import patch
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
@@ -78,7 +79,7 @@ class WebTests(unittest.TestCase):
         return urlopen(Request(self.base+path,data=json.dumps(body).encode(),headers=headers),timeout=2)
 
     def test_assets(self):
-        for path in ('/','/map.js','/geo_alignment.js','/control.js','/viewport.js','/dashboard.js','/dashboard.css'):
+        for path in ('/','/map.js','/geo_alignment.js','/control.js','/viewport.js','/dashboard.js','/dashboard.css','/drawer.css'):
             with urlopen(self.base+path,timeout=2) as r:self.assertGreater(len(r.read()),100)
 
     def test_shared_speed_endpoint(self):
@@ -90,6 +91,27 @@ class WebTests(unittest.TestCase):
             with self.assertRaises(HTTPError):
                 self.post('/api/control/speed_limits',dict(linear_mps=1.1,angular_rps=.2))
         self.assertEqual(received,[('speed_limits',dict(linear_mps=.1,angular_rps=.2))])
+
+    def test_parameter_directory_and_local_workflow(self):
+        class Layout(HTMLParser):
+            def __init__(self):super().__init__();self.ids=[];self.groups=[];self.current=None;self.stack=[]
+            def handle_starttag(self,tag,attrs):
+                a=dict(attrs)
+                if 'id' in a:self.ids.append(a['id'])
+                if tag=='details':
+                    self.stack.append(self.current)
+                    if a.get('class')=='parameter-group':
+                        self.current=[];self.groups.append((a,self.current))
+                if self.current is not None and 'id' in a:self.current.append(a['id'])
+            def handle_endtag(self,tag):
+                if tag=='details':self.current=self.stack.pop()
+        p=Layout();p.feed((self.m.ROOT/'web/index.html').read_text(encoding='utf-8'))
+        self.assertEqual(len(p.ids),len(set(p.ids)))
+        self.assertEqual(len(p.groups),7)
+        self.assertEqual(sum('open' in a for a,_ in p.groups),1)
+        self.assertTrue(all(a.get('name')=='parameters' for a,_ in p.groups))
+        self.assertIn('navLinearSpeed',p.groups[1][1])
+        self.assertTrue(any(set(('pickLioGoal','robotLocalNavigate','robotLocalCancel')).issubset(ids) for _,ids in p.groups))
 
     def test_osm(self):
         with urlopen(self.base+'/api/osm',timeout=2) as r:data=json.load(r)

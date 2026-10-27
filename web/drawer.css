@@ -1,0 +1,14 @@
+.drawer-title{position:sticky;top:-22px;z-index:2;background:#13252f;padding:8px 0;border-bottom:1px solid var(--edge)}
+.drawer-guide{margin:14px 0 20px}
+.parameter-group{padding:0;margin:8px 0;border:1px solid var(--edge);border-radius:10px;overflow:hidden}
+.parameter-group>summary{padding:15px 13px;color:var(--text);font-weight:650;list-style-position:inside;background:#172e39}
+.parameter-group>summary:hover{background:#203d49}
+.parameter-group[open]>summary{color:var(--mint);border-bottom:1px solid var(--edge)}
+.drawer .parameter-group>section{padding:14px;border:0}
+.parameter-group label{display:block;margin:12px 0}
+.parameter-group label input{margin-top:7px}
+.parameter-group details button{width:100%;margin-top:8px}
+.drawer-stop{position:sticky;bottom:-22px;background:#13252f;padding:14px 0 8px;border-top:1px solid var(--edge);z-index:2}
+.drawer-stop>button{width:100%}
+.drawer-stop p:empty{display:none}
+.drawer-stop p{max-height:90px;overflow:auto;overflow-wrap:anywhere}

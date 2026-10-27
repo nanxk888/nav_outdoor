@@ -8,14 +8,14 @@ field('applyNavSpeed').onclick=async()=>{
   field('navSpeedState').textContent='参数已提交，等待下方实际生效值更新';
  }catch(e){field('navSpeedState').textContent='速度设置失败：'+e.message}
 };
-const controlButtons=['robotStart','robotLoco','robotLower','robotStop','robotPose','robotNavigate','robotLocalNavigate'];
+const controlButtons=['robotStart','robotLoco','robotLower','robotStop','robotPose','robotNavigate','robotLocalNavigate','robotLocalCancel'];
 field('robotNavigate').textContent='开始 OSM 导航';
 field('robotRefresh').onclick=async()=>{try{await command('refresh');heartbeatEnabled=false;field('controlResult').textContent='已请求刷新连接；当前运动会话停止，不自动恢复运动'}catch(e){field('controlResult').textContent='刷新失败：'+e.message}};
 async function command(kind,body={}){
  const r=await fetch('/api/control/'+kind,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(1500)});
  if(!r.ok)throw Error(await r.text());return r.json();
 }
-for(const [id,kind] of [['robotStart','start'],['robotLoco','loco'],['robotLower','lower'],['robotStop','stop'],['robotNavigate','navigate'],['robotLocalNavigate','lio_navigate']]){
+for(const [id,kind] of [['robotStart','start'],['robotLoco','loco'],['robotLower','lower'],['robotStop','stop'],['robotLocalCancel','stop'],['robotNavigate','navigate'],['robotLocalNavigate','lio_navigate']]){
  field(id).onclick=async()=>{
   try{
    const body=['loco','lower'].includes(kind)?{confirm_stationary:true}:{};
