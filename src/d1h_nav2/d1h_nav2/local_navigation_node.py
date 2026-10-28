@@ -9,12 +9,14 @@ from std_msgs.msg import String
 from d1h_nav2.navigation_reference import body_heading
 from d1h_nav2.local_navigation import track,speed_limits
 from d1h_nav2.ground_health import require_ground
+from d1h_nav2.memory_pair import MemoryPair
 
 
 class LocalNavigation(Node):
     def __init__(self):
         super().__init__('lio_local_navigation')
         self.odom=None;self.memory={};self.ground={};self.grid=None;self.rx={}
+        self.pair=MemoryPair();self.memory_epoch=None
         self.speed_limits=dict(linear_mps=.15,angular_rps=.35)
         self.run_id=None;self.target=None;self.path=None;self.epoch=None;self.state='IDLE';self.reason='Waiting for full local path'
         self.started=0.;self.last_request=0.;self.lease_rx=-math.inf
@@ -27,6 +29,22 @@ class LocalNavigation(Node):
         self.timer=self.create_timer(.05,self.tick)
 
     def cache(self,key,value):
+        if key in ('grid','memory'):
+            now=time.monotonic()
+            if key=='memory':
+                epoch=value.get('epoch')
+                if epoch!=self.memory_epoch:
+                    self.pair=MemoryPair();self.memory_epoch=epoch;self.grid=None;self.memory={}
+                if self.state=='ACTIVE' and (epoch!=self.epoch or value.get('goal')!=self.target):
+                    self.state='STOPPED';self.reason='Memory reset or selected goal changed'
+                if value.get('ready') is not True:
+                    self.memory=value;self.rx['memory']=now;return
+                stamp=float(value.get('source_stamp',0))
+            else:stamp=value.header.stamp.sec+value.header.stamp.nanosec/1e9
+            matched=self.pair.add(key,stamp,value,now)
+            if matched:
+                self.grid,self.memory,self.rx['grid'],self.rx['memory']=matched
+            return
         if key=='odom' and self.odom is not None and self.state=='ACTIVE':
             old=self.odom;p=value.pose.pose.position;q=old.pose.pose.position
             dt=(value.header.stamp.sec-old.header.stamp.sec)+(value.header.stamp.nanosec-old.header.stamp.nanosec)/1e9
@@ -60,7 +78,7 @@ class LocalNavigation(Node):
         m=self.memory
         if not fresh('memory',1.) or m.get('ready') is not True or m.get('frame')!='lio_odom' or not -.05<=ros-float(m.get('source_stamp',0))<1.:raise ValueError('Observed memory stale')
         if not fresh('grid',1.) or self.grid is None or not -.05<=age(self.grid)<1. or self.grid.header.frame_id!='lio_odom':raise ValueError('Observed grid stale/mismatched')
-        if abs(m['source_stamp']-(self.grid.header.stamp.sec+self.grid.header.stamp.nanosec/1e9))>.3:raise ValueError('Grid/memory source mismatch')
+        if abs(m['source_stamp']-(self.grid.header.stamp.sec+self.grid.header.stamp.nanosec/1e9))>.001:raise ValueError('Grid/memory source mismatch')
         g=m.get('goal');r=m.get('route')
         if not isinstance(g,list) or len(g)!=2:
             raise ValueError('No selected LIO goal')

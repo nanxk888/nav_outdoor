@@ -284,8 +284,10 @@ class Control:
             if now-getattr(self,'battery_query_time',-100.)>=60:
                 self.send('battery');self.battery_query_time=now
             active = self.phase not in ('IDLE','STOPPED','DISABLED')
-            if active and (now-self.browser>2. or now-self.robot_time>.3):
-                self.stop('Browser/robot heartbeat timeout'); active = False
+            if active and now-self.browser>2.:
+                self.stop('网页心跳超时：超过2秒未收到'); active = False
+            if active and now-self.robot_time>.3:
+                self.stop('机器人反馈超时：超过0.3秒未收到'); active = False
             if active and self.phase != 'ARMING' and (self.robot.get('fault') or not self.robot.get('fsm_fresh')):
                 self.stop('Receiver fault / stale FSM'); active = False
             if not getattr(self,'local_mode',False) and self.phase in ('GOAL_PENDING','NAVIGATING') and getattr(self,'speed_pub',None) is not None:

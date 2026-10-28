@@ -1,4 +1,6 @@
 let heartbeatEnabled=false,pendingHeartbeat=false;
+let navigationPending=false,navigationPhase='';
+const navigationBusy=()=>navigationPending||['ARMING','GOAL_PENDING','NAVIGATING'].includes(navigationPhase);
 const field=id=>document.getElementById(id);
 field('applyNavSpeed').onclick=async()=>{
  try{
@@ -17,11 +19,15 @@ async function command(kind,body={}){
 }
 for(const [id,kind] of [['robotStart','start'],['robotLoco','loco'],['robotLower','lower'],['robotStop','stop'],['robotLocalCancel','stop'],['robotNavigate','navigate'],['robotLocalNavigate','lio_navigate']]){
  field(id).onclick=async()=>{
+  const navigation=['navigate','lio_navigate'].includes(kind);
+  if(navigation&&navigationBusy())return;
+  if(navigation){navigationPending=true;field('robotNavigate').disabled=true;field('robotLocalNavigate').disabled=true;}
   try{
    const body=['loco','lower'].includes(kind)?{confirm_stationary:true}:{};
    const r=await command(kind,body);heartbeatEnabled=kind!=='stop';
    field('controlResult').textContent='请求已排队，非执行成功：'+JSON.stringify(r);
   }catch(e){field('controlResult').textContent='请求被拒绝或结果未知：'+e.message}
+  finally{if(navigation)setTimeout(()=>{navigationPending=false;for(const n of ['robotNavigate','robotLocalNavigate'])field(n).disabled=navigationBusy()},2000)}
  };
 }
 field('robotPose').onclick=async()=>{
@@ -31,6 +37,7 @@ field('robotPose').onclick=async()=>{
  catch(e){field('controlResult').textContent='请求被拒绝或结果未知：'+e.message}
 };
 window.updateControl=s=>{
+ navigationPhase=s?.phase||'';
  if(s?.speed_limits)field('navSpeedState').textContent=`当前上限：前进≤${s.speed_limits.linear_mps} m/s，转向≤${s.speed_limits.angular_rps} rad/s。室外Nav2：${s.outdoor_speed_verified?'参数已应用并回读确认':s.outdoor_speed?.reason||'未启动／等待同步'}。`;
  field('controlState').textContent=s?JSON.stringify(s,null,2):'网关断开，实际机器人状态未知';
  const batteryAge=s?.battery_receive_age_sec;
@@ -49,7 +56,8 @@ window.updateControl=s=>{
  // Operator can always submit an intent. Hardware authorization, session state,
  // standstill, numeric limits and navigation safety remain server-side checks.
  for(const id of controlButtons)field(id).disabled=false;
- if(s&&['IDLE','STOPPED','DISABLED'].includes(s.phase))heartbeatEnabled=false;
+ for(const id of ['robotNavigate','robotLocalNavigate'])field(id).disabled=navigationBusy();
+ if(s&&!navigationPending&&['IDLE','STOPPED','DISABLED'].includes(s.phase))heartbeatEnabled=false;
 };
 for(const id of controlButtons)field(id).disabled=false;
 setInterval(async()=>{
