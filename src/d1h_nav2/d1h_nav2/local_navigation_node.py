@@ -17,6 +17,7 @@ class LocalNavigation(Node):
         super().__init__('lio_local_navigation')
         self.odom=None;self.memory={};self.ground={};self.grid=None;self.rx={}
         self.pair=MemoryPair();self.memory_epoch=None
+        self.memory_diagnostics={}
         self.speed_limits=dict(linear_mps=.15,angular_rps=.35)
         self.run_id=None;self.target=None;self.path=None;self.epoch=None;self.state='IDLE';self.reason='Waiting for full local path'
         self.started=0.;self.last_request=0.;self.lease_rx=-math.inf
@@ -76,8 +77,19 @@ class LocalNavigation(Node):
         if self.odom.header.frame_id!='lio_odom' or self.odom.child_frame_id!='lio_imu':raise ValueError('Unexpected LIO frames')
         require_ground(self.ground,now-self.rx.get('ground',-math.inf))
         m=self.memory
-        if not fresh('memory',1.) or m.get('ready') is not True or m.get('frame')!='lio_odom' or not -.05<=ros-float(m.get('source_stamp',0))<1.:raise ValueError('Observed memory stale')
-        if not fresh('grid',1.) or self.grid is None or not -.05<=age(self.grid)<1. or self.grid.header.frame_id!='lio_odom':raise ValueError('Observed grid stale/mismatched')
+        receive_age=now-self.rx.get('memory',-math.inf);scan_age=ros-float(m.get('source_stamp',0))
+        self.memory_diagnostics=dict(self.pair.diagnostics(now),receive_age_sec=receive_age if math.isfinite(receive_age) else None,
+            scan_age_sec=scan_age,grid_receive_age_sec=now-self.rx['grid'] if 'grid' in self.rx else None,
+            grid_scan_age_sec=age(self.grid) if self.grid is not None else None,
+            node_ready=m.get('ready'),node_reason=m.get('readiness_reason',m.get('reason')),processing=m.get('diagnostics',{}))
+        failures=[]
+        if receive_age>=1.:failures.append('配对状态接收超时')
+        if m.get('ready') is not True:failures.append('记忆节点未就绪')
+        if m.get('frame')!='lio_odom':failures.append('坐标系不匹配')
+        if not -.05<=scan_age<1.:failures.append('源扫描过期或时间异常')
+        if failures:raise ValueError('观察记忆失效：'+','.join(failures)+'；'+json.dumps(self.memory_diagnostics,ensure_ascii=False))
+        if not fresh('grid',1.) or self.grid is None or not -.05<=age(self.grid)<1. or self.grid.header.frame_id!='lio_odom':
+            raise ValueError('观察栅格失效：接收超时、源扫描过期或坐标系异常；'+json.dumps(self.memory_diagnostics,ensure_ascii=False))
         if abs(m['source_stamp']-(self.grid.header.stamp.sec+self.grid.header.stamp.nanosec/1e9))>.001:raise ValueError('Grid/memory source mismatch')
         g=m.get('goal');r=m.get('route')
         if not isinstance(g,list) or len(g)!=2:

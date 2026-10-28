@@ -74,7 +74,7 @@ def main():
             ('nav',PointCloud2,'/livox/lidar/pointcloud_nav'),('clear',PointCloud2,'/livox/lidar/pointcloud_clear'),
             ('ground',String,'/navigation/cloud_filter/status'),('register',String,'/navigation/reference/register'),
             ('goal',String,'/navigation/memory/goal_candidate'),('reset',String,'/navigation/memory/reset')]}
-        position=[0.,0.];browser_on=[True];obstacles=[]
+        position=[0.,0.];heading=[0.];browser_on=[True];obstacles=[]
         latest={};diagnostics={};next_pub=0.;next_heartbeat=0.;child=None;log=(directory/'nav2.log').open('w+')
         diagnostic_subs=[]
         for topic,kind in [('/real_navigation/cmd_vel_raw',Twist),('/real_navigation/cmd_vel_candidate',Twist),('/navigation/display_plan',RosPath),('/navigation/replanning_status',String)]:
@@ -92,6 +92,9 @@ def main():
                     h=Header();h.frame_id='lio_odom';h.stamp=fixture.get_clock().now().to_msg()
                     o=Odometry();o.header=h;o.child_frame_id='lio_imu'
                     o.pose.pose.orientation.x=-math.sin(-math.pi/12);o.pose.pose.orientation.z=math.cos(math.pi/12);o.pose.pose.orientation.w=0.
+                    x,z=o.pose.pose.orientation.x,o.pose.pose.orientation.z;c,s=math.cos(heading[0]/2),math.sin(heading[0]/2)
+                    o.pose.pose.orientation.x=x*c;o.pose.pose.orientation.y=x*s
+                    o.pose.pose.orientation.z=z*c;o.pose.pose.orientation.w=-z*s
                     o.pose.pose.position.x=position[0];o.pose.pose.position.y=position[1]
                     g=NavSatFix();g.header.stamp=h.stamp;g.status.status=0;g.latitude=0.;g.longitude=0.
                     latest.update(odom=o,gps=g);pubs['odom'].publish(o)
@@ -169,6 +172,14 @@ def main():
             control.enqueue('stop',{});step(.5)
             select(4.5,0.);begin();step(.3)
             assert control.phase=='NAVIGATING',('Observed goal beyond 2.5m must be accepted',control.status())
+            control.enqueue('stop',{});step(.5)
+            select(-.1,0.);begin();step(.4)
+            assert local_executor.motion_phase=='ALIGN_HEADING' and policy.command[0]==0. and abs(policy.command[1])>0.,('rear goal must rotate at zero forward speed',control.status(),local_executor.motion_phase)
+            revision=local_executor.follow_revision;step(.6)
+            assert local_executor.follow_revision==revision,'alignment must not keep replacing the turn path'
+            for i in range(1,13):heading[0]=i*math.pi/12;step(.15)
+            step(.6)
+            assert control.phase=='NAVIGATING' and local_executor.motion_phase=='FOLLOW_PATH' and policy.command[0]>0.,('aligned robot must resume forward tracking',control.status(),local_executor.motion_phase)
             control.enqueue('stop',{});step(.5)
             assert not modes and not server_errors
             print('PASS: GPS-free Smac/RPP -> local forward/turn -> authenticated LOOPBACK UDP; partial rejected, arrival zero, obstacle reroute, reset/sensor/SDK/FSM/browser/lease stop, no auto resume or mode commands')

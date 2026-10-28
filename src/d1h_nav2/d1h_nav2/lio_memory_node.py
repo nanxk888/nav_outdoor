@@ -31,6 +31,7 @@ class LioMemoryNode(Node):
         self.bundles={};self.previous=None;self.frame='';self.last_scan=0;self.origin=(0.,0.);self.goal=None
         self.saved_route=None
         self.worker=ThreadPoolExecutor(max_workers=1);self.planning=None;self.next_plan=0.;self.view=[]
+        self.diagnostics={};self.tick_started=None;self.plan_started=None
         self.epoch=uuid.uuid4().hex;self.reason='waiting for exact-time LIO + nav + clear'
         self.ground={};self.ground_rx=-math.inf;self.scan_rx=-math.inf
         self.status=self.create_publisher(String,'/navigation/memory/status',1)
@@ -51,9 +52,11 @@ class LioMemoryNode(Node):
         return super().destroy_node()
 
     def prepare_display(self):
+        started=time.monotonic()
         nearby=sorted(self.memory.cells.items(),key=lambda item:math.dist(self.memory.point(item[0]),self.origin))[:20000]
         self.view=[[*self.memory.point(c),v[0]] for c,v in nearby]
         self.display_pub.publish(String(data=json.dumps(dict(epoch=self.epoch,cells=self.view))))
+        self.diagnostics['display_ms']=(time.monotonic()-started)*1000
 
     @staticmethod
     def candidate(memory,origin,goal,previous,now):
@@ -123,6 +126,9 @@ class LioMemoryNode(Node):
         return np.asarray(list(raw),dtype=float).reshape(-1,3)[:,:2]
 
     def tick(self):
+        started=time.monotonic()
+        self.diagnostics['tick_interval_ms']=(started-self.tick_started)*1000 if self.tick_started else None
+        self.tick_started=started
         now=self.get_clock().now().nanoseconds/1e9
         if self.memory.time is not None and now<self.memory.time:self.reset()
         keys=[k for k,b in self.bundles.items() if len(b)==3 and k>self.last_scan]
@@ -131,7 +137,9 @@ class LioMemoryNode(Node):
             try:
                 if not -.05<=now-k/1e9<=.5 or any(m.header.frame_id!=self.frame for m in b.values()):raise ValueError('Stale/mismatched scan')
                 p=b['odom'].pose.pose.position;self.origin=(p.x,p.y)
+                observed=time.monotonic()
                 self.memory.observe(self.origin,self.points(b['nav']),self.points(b['clear']),now)
+                self.diagnostics['observe_ms']=(time.monotonic()-observed)*1000
                 self.last_scan=k;self.scan_rx=time.monotonic();self.reason='observed-space memory updated; terrain not qualified'
                 self.bundles={t:v for t,v in self.bundles.items() if t>k}
             except (ValueError,TypeError,IndexError) as exc:self.scan_rx=-math.inf;self.reason=str(exc)
@@ -139,6 +147,7 @@ class LioMemoryNode(Node):
         ready=self.ready();route=None
         if self.goal and time.monotonic()-self.goal[2]>300:self.goal=None
         if self.planning and self.planning[0].done():
+            self.diagnostics['candidate_wall_ms']=(time.monotonic()-self.plan_started)*1000
             future,epoch,goal=self.planning;self.planning=None
             if epoch==self.epoch and goal==self.goal:
                 try:self.saved_route=future.result()
@@ -149,18 +158,30 @@ class LioMemoryNode(Node):
                 snapshot=copy.copy(self.memory);snapshot.cells=dict(self.memory.cells)
                 future=self.worker.submit(self.candidate,snapshot,self.origin,self.goal[:2],self.saved_route,now)
                 self.planning=(future,self.epoch,self.goal);self.next_plan=time.monotonic()+1.
+                self.plan_started=time.monotonic()
         path=Path();path.header.frame_id=self.frame;path.header.stamp=self.get_clock().now().to_msg()
         if route:
             for x,y in route['points']:
                 p=PoseStamped();p.header=path.header;p.pose.position.x=x;p.pose.position.y=y;p.pose.orientation.w=1.;path.poses.append(p)
         self.path_pub.publish(path)  # Empty path explicitly invalidates an older candidate.
+        grid_started=time.monotonic()
         if ready:self.publish_grid()
+        self.diagnostics.update(grid_publish_ms=(time.monotonic()-grid_started)*1000,
+            scan_age_sec=self.get_clock().now().nanoseconds/1e9-self.last_scan/1e9,
+            matched_scan_receive_age_sec=time.monotonic()-self.scan_rx if math.isfinite(self.scan_rx) else None,
+            ground_receive_age_sec=time.monotonic()-self.ground_rx if math.isfinite(self.ground_rx) else None,
+            ground_reason=self.ground.get('reason'),ground_ready=self.ground.get('ready'),
+            incomplete_bundles=sum(len(b)<3 for b in self.bundles.values()),
+            pending_components={name:sum(name in b for b in self.bundles.values()) for name in ('odom','nav','clear')},
+            planning_pending=self.planning is not None)
+        readiness_reason='正常' if ready else ('扫描配对未更新' if time.monotonic()-self.scan_rx>=1 else '地面状态未就绪或过期')
         self.status.publish(String(data=json.dumps({'ready':ready,'frame':self.frame,'epoch':self.epoch,
             'source_stamp':self.last_scan/1e9,'resolution_m':self.memory.resolution,
             'cell_count':len(self.memory.cells),'retention_sec':self.memory.retention,'goal':self.goal[:2] if self.goal else None,
             'footprint_radius_m':self.memory.radius,
-            'route':route,'reason':self.reason,'candidate_only':True,'base_link_ready':False,
+            'route':route,'reason':self.reason,'readiness_reason':readiness_reason,'diagnostics':self.diagnostics,'candidate_only':True,'base_link_ready':False,
             'scope':'planar visibility memory; no pit/terrain guarantee; no motor output'})))
+        self.diagnostics['tick_ms']=(time.monotonic()-started)*1000
 
     def publish_grid(self):
         # Keep the existing 20m GPS off-road connector within the evidence grid.

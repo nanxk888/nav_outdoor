@@ -19,7 +19,7 @@ def configure(context):
     controller['goal_checker'].update(xy_goal_tolerance=.08,yaw_goal_tolerance=3.141593)
     controller['progress_checker'].update(required_movement_radius=.05,movement_time_allowance=20.)
     controller['FollowPath'].update(desired_linear_vel=.15,rotate_to_heading_angular_vel=.35,
-                                    allow_reversing=False,rotate_to_heading_min_angle=.45,
+                                    allow_reversing=False,rotate_to_heading_min_angle=.261799,
                                     cost_scaling_dist=.25,inflation_cost_scaling_factor=5.)
     smoother=copy.deepcopy(base['velocity_smoother']['ros__parameters'])
     smoother.update(use_sim_time=False,odom_topic='/lio_navigation/odometry',max_velocity=[.15,0.,.35],min_velocity=[0.,0.,-.35])

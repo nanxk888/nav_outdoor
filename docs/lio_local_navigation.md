@@ -1,5 +1,16 @@
 # 无 GPS 小范围 LIO 导航：滚动 Smac + RPP
 
+原地对准阶段：最短路径航向误差超过120°时，固定当前已接受的RPP路径，线速度强制为零，
+角速度仍取带碰撞检查的RPP输出。误差降到15°以内后恢复滚动规划与跟踪。
+RPP动作结束可释放固定路径进入重新规划；定位、地图或连接失效仍停止。
+执行状态包含motion_phase与heading_error_deg。
+
+观察记忆失败日志区分配对状态接收超时、节点未就绪、源扫描过期/时间异常、坐标系错误。
+memory_diagnostics包含接收/扫描年龄、栅格年龄、pair_wait_sec、node_reason，以及
+observe_ms、grid_publish_ms、display_ms、tick_ms/tick_interval_ms、candidate_wall_ms、
+待配对消息组件数与地面状态。candidate_wall_ms是后台提交到结果收取的墙钟时间，包含排队/轮询，
+不是纯算法CPU时间。失败原因同时输出到ROS终端与前端状态；未放宽原有超时。
+
 到站策略：按0.3m/s²的规划减速假设施加距离速度上限（非实测制动能力），
 最后0.8m限速不高于0.15m/s。进入0.15m即锁定零速并取消跟踪，不再自动向前追目标；
 连续新鲜LIO测量显示平移速度≤0.03m/s、转速≤0.05rad/s持续0.7秒，才报告到达。
