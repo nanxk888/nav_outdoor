@@ -44,7 +44,7 @@ window.updateControl=s=>{
  const robot=s?.robot,fsm=robot?.fsm||'未知';
  const valid=!!s&&s.robot_receive_age_sec<.3&&robot?.fsm_valid===true;
  field('robotFsm').textContent=`机器人FSM：${fsm}（${valid?'状态校验有效':'未验证/已过期，请勿视作当前状态'}）`;
- field('controlFlow').textContent=s?`控制流程：${s.phase}；${s.reason||''}`:'网关断开；软件停止状态未知，请检查硬件';
+ field('controlFlow').textContent=s?`控制流程：${s.phase}；${window.NavUI?.reason?.(s.reason)||s.reason||''}`:'网关断开；软件停止状态未知，请检查硬件';
  field('controlBrief').textContent=`FSM：${fsm} · ${s?.phase||'连接中断'}`;
  // Operator can always submit an intent. Hardware authorization, session state,
  // standstill, numeric limits and navigation safety remain server-side checks.

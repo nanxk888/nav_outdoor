@@ -158,6 +158,11 @@ def main():
             control.enqueue('speed_limits',dict(linear_mps=.1,angular_rps=.1));step(1.)
             index=len(received);step(.5)
             assert control.phase=='NAVIGATING' and all(v<=.100001 and abs(w)<=.100001 for v,w in received[index:]),control.status()
+            local_executor.cancel_backend();local_executor.next_plan=time.monotonic()+5.
+            step(3.6)
+            assert control.phase=='NAVIGATING' and policy.command==(0.,0.),('temporary missing path must hold task at zero, not cancel after 3s',control.status())
+            local_executor.started-=65.;local_executor.next_plan=0.;step(1.)
+            assert control.phase=='NAVIGATING','No fixed 60-second task deadline'
             control.enqueue('stop',{});step(.5)
             assert not modes and not server_errors
             print('PASS: GPS-free Smac/RPP -> local forward/turn -> authenticated LOOPBACK UDP; partial rejected, arrival zero, obstacle reroute, reset/sensor/SDK/FSM/browser/lease stop, no auto resume or mode commands')

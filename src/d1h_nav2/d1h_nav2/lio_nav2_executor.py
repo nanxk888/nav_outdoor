@@ -130,7 +130,7 @@ class LioNav2Executor(LocalNavigation):
                 path=result.result.path;points=[(p.pose.position.x,p.pose.position.y) for p in path.poses]
                 if len(points)>4000 or not all(math.isfinite(v) for p in points for v in p) or sum(math.dist(a,b) for a,b in zip(points,points[1:]))>6.:
                     raise ValueError('Smac path exceeds local geometry budget')
-                if path.header.frame_id!='lio_odom' or not self.valid(points):raise ValueError('Smac path footprint blocked/unknown in latest memory')
+                if path.header.frame_id!='lio_odom':raise ValueError('Smac path frame mismatch')
                 self.plan_error='';self.plan_points=points;self.follow_revision+=1;revision=self.follow_revision
                 request=FollowPath.Goal();request.path=path;request.controller_id='FollowPath';request.goal_checker_id='goal_checker'
                 def accepted(done):
@@ -165,7 +165,6 @@ class LioNav2Executor(LocalNavigation):
             if self.state in ('IDLE','READY'):self.state='READY';self.reason='Smac/RPP ready; explicit full-path start required'
             if self.state=='ACTIVE':
                 if now-self.lease_rx>.3:raise ValueError('Local execution session lease expired')
-                if now-self.started>60:raise ValueError('Local task timeout')
                 if done:self.state='SUCCEEDED';self.reason='Local goal reached; holding zero'
                 else:
                     if not self.plan_busy and now>=self.next_plan:self.plan(position)
@@ -173,20 +172,13 @@ class LioNav2Executor(LocalNavigation):
                     if self.plan_points:
                         k=min(range(len(self.plan_points)),key=lambda i:math.dist(position,self.plan_points[i]))
                         points=[position]+self.plan_points[k:]
-                    usable=bool(points) and self.valid(points) and self.follow_active and now-self.cmd_rx<.3
+                    usable=bool(points) and self.follow_active and now-self.cmd_rx<.3
                     if usable:
-                        v,w=self.cmd;q=self.odom.pose.pose.orientation;yaw=body_heading((q.x,q.y,q.z,q.w))
-                        arc=[position]
-                        for k in range(1,11):
-                            t=k*.1
-                            arc.append((position[0]+v*t*math.cos(yaw),position[1]+v*t*math.sin(yaw)) if abs(w)<1e-6 else
-                                (position[0]+v/w*(math.sin(yaw+w*t)-math.sin(yaw)),position[1]-v/w*(math.cos(yaw+w*t)-math.cos(yaw))))
-                        if not self.valid(arc):usable=False;v=w=0.
-                    if usable:self.blocked_since=None;self.reason='Rolling Smac + RPP tracking'
+                        v,w=self.cmd;self.blocked_since=None;self.reason='正在导航：Smac规划／RPP跟踪'
                     else:
                         v=w=0.;self.reason='Holding zero; '+(self.plan_error or 'waiting for valid Smac path/RPP velocity')
                         if self.blocked_since is None:self.blocked_since=now
-                        if now-self.blocked_since>3.:raise ValueError('No usable local Smac/RPP command for 3s; explicit restart required')
+                        self.reason='等待通路／重新规划：'+(self.plan_error or '等待RPP速度')
         except (ValueError,TypeError,KeyError,OverflowError) as exc:
             self.reason=str(exc)
             if self.state=='ACTIVE':self.state='STOPPED'
@@ -195,7 +187,7 @@ class LioNav2Executor(LocalNavigation):
         self.pub.publish(String(data=json.dumps(dict(stamp=self.get_clock().now().nanoseconds/1e9,ready=ready,
             state=self.state,reason=self.reason,run_id=self.run_id,epoch=self.memory.get('epoch'),goal=self.memory.get('goal'),
             v=v,w=w,speed_limits=self.speed_limits,gps_required=False,controller='Nav2 RPP',planner='SmacPlanner2D',
-            plan=self.plan_points if self.state=='ACTIVE' else []))))
+            plan=self.plan_points if self.state=='ACTIVE' else [],main_path=self.reference))))
 
 
 def main():

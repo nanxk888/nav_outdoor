@@ -23,9 +23,9 @@ def stamp(msg):return msg.header.stamp.sec*10**9+msg.header.stamp.nanosec
 class LioMemoryNode(Node):
     def __init__(self):
         super().__init__('lio_observed_memory')
-        for k,v in {'resolution_m':.25,'retention_sec':300.,'footprint_radius_m':.25}.items():self.declare_parameter(k,v)
+        for k,v in {'resolution_m':.1,'retention_sec':300.,'footprint_radius_m':.25}.items():self.declare_parameter(k,v)
         self.memory=ObservedMemory(self.get_parameter('resolution_m').value,self.get_parameter('retention_sec').value,
-                                   radius=self.get_parameter('footprint_radius_m').value)
+                                   radius=self.get_parameter('footprint_radius_m').value,min_points=3,confirm_frames=2)
         self.bundles={};self.previous=None;self.frame='';self.last_scan=0;self.origin=(0.,0.);self.goal=None
         self.saved_route=None
         self.epoch=uuid.uuid4().hex;self.reason='waiting for exact-time LIO + nav + clear'
@@ -48,6 +48,7 @@ class LioMemoryNode(Node):
     def reset(self):
         self.saved_route=None
         self.memory.cells.clear();self.memory.time=None;self.goal=None;self.bundles.clear();self.last_scan=0
+        self.memory.hits.clear();self.memory.free_hits.clear()
         self.scan_rx=-math.inf
         self.epoch=uuid.uuid4().hex;self.reason='LIO reset/gap: memory and goal cleared'
         # Explicitly invalidate downstream cached candidates/grids immediately.
@@ -133,8 +134,9 @@ class LioMemoryNode(Node):
                 p=PoseStamped();p.header=path.header;p.pose.position.x=x;p.pose.position.y=y;p.pose.orientation.w=1.;path.poses.append(p)
         self.path_pub.publish(path)  # Empty path explicitly invalidates an older candidate.
         if ready:self.publish_grid()
-        cells=sorted(self.memory.cells.items());stride=max(1,math.ceil(len(cells)/3000))
-        view=[[*self.memory.point(c),v[0]] for c,v in cells[::stride]]
+        cells=sorted(self.memory.cells.items())
+        nearby=sorted(cells,key=lambda item:math.dist(self.memory.point(item[0]),self.origin))[:20000]
+        view=[[*self.memory.point(c),v[0]] for c,v in nearby]
         self.status.publish(String(data=json.dumps({'ready':ready,'frame':self.frame,'epoch':self.epoch,
             'source_stamp':self.last_scan/1e9,'resolution_m':self.memory.resolution,'cells':view,
             'cell_count':len(cells),'retention_sec':self.memory.retention,'goal':self.goal[:2] if self.goal else None,

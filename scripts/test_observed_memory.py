@@ -8,6 +8,18 @@ from d1h_nav2.footprint import circle_cells
 
 
 class MemoryTests(unittest.TestCase):
+    def test_noise_confirmation_and_multiframe_clear(self):
+        m=ObservedMemory(resolution=.1,min_points=3,confirm_frames=2)
+        m.observe((0,0),[(1.,0)],[],1.)
+        self.assertNotIn((10,0),m.cells)
+        m.observe((0,0),[(1.,0)],[],2.)
+        self.assertEqual(m.cells[(10,0)][0],100)
+        m.observe((0,0),[],[(2.,0),(2.1,0)],3.)
+        self.assertEqual(m.cells[(10,0)][0],100,'multiple rays in one scan are not multiple frames')
+        m.observe((0,0),[],[(2.,0)],4.)
+        self.assertEqual(m.cells[(10,0)][0],0)
+        m.observe((0,0),[(1.,0),(1.01,0),(1.02,0)],[],5.)
+        self.assertEqual(m.cells[(10,0)][0],100)
     def plane(self):
         m=ObservedMemory(radius=.3)
         m.cells={(x,y):(0,10.) for x in range(-10,31) for y in range(-10,11)}

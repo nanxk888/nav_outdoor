@@ -13,8 +13,9 @@
  function drawMemory(ctx,camera,convert){
   if(!memoryReady())return;
   const m=memory.value,half=m.resolution_m/2;
-  for(const cell of (m.cells||[]).slice(0,3000)){ctx.fillStyle=cell[2]===100?'#d5786b88':'#5fa89622';ctx.beginPath();[[-half,-half],[half,-half],[half,half],[-half,half]].forEach(([dx,dy],i)=>{const p=camera.screen(convert([cell[0]+dx,cell[1]+dy]));i?ctx.lineTo(...p):ctx.moveTo(...p)});ctx.closePath();ctx.fill()}
+  for(const cell of (m.cells||[]).slice(0,20000)){ctx.fillStyle=cell[2]===100?'#d5786b88':'#5fa89622';ctx.beginPath();[[-half,-half],[half,-half],[half,half],[-half,half]].forEach(([dx,dy],i)=>{const p=camera.screen(convert([cell[0]+dx,cell[1]+dy]));i?ctx.lineTo(...p):ctx.moveTo(...p)});ctx.closePath();ctx.fill()}
   const e=localExecution?.value,route=e?.state==='ACTIVE'&&age(localExecution)<1&&e.epoch===m.epoch&&e.plan?.length?{points:e.plan,partial:false}:m.route;
+  if(e?.state==='ACTIVE'&&age(localExecution)<1&&e.epoch===m.epoch&&e.main_path?.length){ctx.strokeStyle='#98a8b8';ctx.lineWidth=1;ctx.beginPath();e.main_path.forEach((p,i)=>{const v=camera.screen(convert(p));i?ctx.lineTo(...v):ctx.moveTo(...v)});ctx.stroke()}
   if(route?.points){ctx.strokeStyle=route.partial?'#f4cd71':'#82bafa';ctx.lineWidth=3;ctx.beginPath();route.points.forEach((p,i)=>{const v=camera.screen(convert(p));i?ctx.lineTo(...v):ctx.moveTo(...v)});ctx.stroke()}
  }
  async function memoryGoal(p){

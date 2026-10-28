@@ -6,11 +6,12 @@ from d1h_nav2.footprint import circle_cells,path_free
 
 
 class ObservedMemory:
-    def __init__(self,resolution=.25,retention=300.,max_cells=60000,radius=.25):
+    def __init__(self,resolution=.25,retention=300.,max_cells=100000,radius=.25,min_points=1,confirm_frames=1):
         if not .1<=resolution<=1 or not 1<=retention<=600 or not 100<=max_cells<=100000 or not .25<=radius<=1.5:
             raise ValueError('Invalid bounded memory parameters')
         self.resolution=resolution;self.retention=retention;self.max_cells=max_cells;self.radius=radius
         self.cells={};self.time=None
+        self.min_points=min_points;self.confirm_frames=confirm_frames;self.hits={};self.free_hits={}
 
     def cell(self,p):return (math.floor(p[0]/self.resolution),math.floor(p[1]/self.resolution))
     def point(self,c):return ((c[0]+.5)*self.resolution,(c[1]+.5)*self.resolution)
@@ -27,18 +28,32 @@ class ObservedMemory:
         """
         self.expire(now)
         def allowed(p):return all(math.isfinite(v) for v in p[:2]) and math.dist(origin[:2],p[:2])<=max_range
-        occupied={self.cell(p) for p in obstacles if allowed(p)}
+        counts={}
+        for p in obstacles:
+            if allowed(p):
+                c=self.cell(p);counts[c]=counts.get(c,0)+1
+        raw=set(counts)
+        self.hits={c:(self.hits.get(c,0)+1) for c in raw}
+        occupied={c for c in raw if self.hits[c]>=self.confirm_frames or
+                  sum(counts.get((c[0]+i,c[1]+j),0) for i in (-1,0,1) for j in (-1,0,1))>=self.min_points}
         start=self.cell(origin)
         # Deduplicate before ray traversal, with deterministic bounded endpoint sampling.
         endpoints=sorted({self.cell(p) for p in returns if allowed(p)})
+        cleared=set()
         stride=max(1,math.ceil(len(endpoints)/2000))
         for end in endpoints[::stride]:
             count=max(abs(end[0]-start[0]),abs(end[1]-start[1]),1)
             for i in range(count+1):
                 c=(round(start[0]+(end[0]-start[0])*i/count),round(start[1]+(end[1]-start[1])*i/count))
-                if c in occupied:break
+                if c in raw:break
+                if c in cleared:continue
+                cleared.add(c)
+                if self.cells.get(c,(0,0))[0]==100:
+                    self.free_hits[c]=self.free_hits.get(c,0)+1
+                    if self.free_hits[c]<2:continue
                 self.cells[c]=(0,now)
-        for c in occupied:self.cells[c]=(100,now)
+        for c in occupied:self.cells[c]=(100,now);self.free_hits.pop(c,None)
+        self.free_hits={c:n for c,n in self.free_hits.items() if c in cleared and self.cells.get(c,(0,0))[0]==100}
         if len(self.cells)>self.max_cells:
             self.cells=dict(sorted(self.cells.items(),key=lambda item:item[1][1],reverse=True)[:self.max_cells])
 

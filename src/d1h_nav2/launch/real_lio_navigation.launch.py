@@ -17,8 +17,10 @@ def configure(context):
     controller=copy.deepcopy(base['controller_server']['ros__parameters'])
     controller.update(use_sim_time=False,odom_topic='/lio_navigation/odometry')
     controller['goal_checker'].update(xy_goal_tolerance=.15,yaw_goal_tolerance=3.141593)
+    controller['progress_checker'].update(required_movement_radius=.05,movement_time_allowance=20.)
     controller['FollowPath'].update(desired_linear_vel=.15,rotate_to_heading_angular_vel=.35,
-                                    allow_reversing=False,rotate_to_heading_min_angle=.45)
+                                    allow_reversing=False,rotate_to_heading_min_angle=.45,
+                                    cost_scaling_dist=.25,inflation_cost_scaling_factor=5.)
     smoother=copy.deepcopy(base['velocity_smoother']['ros__parameters'])
     smoother.update(use_sim_time=False,odom_topic='/lio_navigation/odometry',max_velocity=[.15,0.,.35],min_velocity=[0.,0.,-.35])
     planner=copy.deepcopy(local['local_planner']['planner_server']['ros__parameters'])
@@ -31,7 +33,7 @@ def configure(context):
         always_send_full_costmap=True,plugins=['observed_space','inflation_layer'],
         observed_space=dict(plugin='nav2_costmap_2d::StaticLayer',map_topic='/navigation/memory/grid',
                             map_subscribe_transient_local=False,subscribe_to_updates=False),
-        inflation_layer=dict(plugin='nav2_costmap_2d::InflationLayer',inflation_radius=.4,cost_scaling_factor=5.))
+        inflation_layer=dict(plugin='nav2_costmap_2d::InflationLayer',inflation_radius=.2,cost_scaling_factor=5.))
     params={'/lio_nav/controller_server':{'ros__parameters':controller},
             '/lio_nav/planner_server':{'ros__parameters':planner},
             '/lio_nav/velocity_smoother':{'ros__parameters':smoother},
