@@ -3,6 +3,8 @@ import json
 import math
 import time
 import uuid
+import copy
+from concurrent.futures import ThreadPoolExecutor
 from array import array
 import numpy as np
 import rclpy
@@ -28,9 +30,11 @@ class LioMemoryNode(Node):
                                    radius=self.get_parameter('footprint_radius_m').value,min_points=3,confirm_frames=2)
         self.bundles={};self.previous=None;self.frame='';self.last_scan=0;self.origin=(0.,0.);self.goal=None
         self.saved_route=None
+        self.worker=ThreadPoolExecutor(max_workers=1);self.planning=None;self.next_plan=0.;self.view=[]
         self.epoch=uuid.uuid4().hex;self.reason='waiting for exact-time LIO + nav + clear'
         self.ground={};self.ground_rx=-math.inf;self.scan_rx=-math.inf
         self.status=self.create_publisher(String,'/navigation/memory/status',1)
+        self.display_pub=self.create_publisher(String,'/navigation/memory/display',1)
         self.grid_pub=self.create_publisher(OccupancyGrid,'/navigation/memory/grid',1)
         self.path_pub=self.create_publisher(Path,'/navigation/memory/path_candidate',1)
         self.subs=[self.create_subscription(Odometry,'/navigation/lio/odometry',self.on_odom,10),
@@ -39,7 +43,26 @@ class LioMemoryNode(Node):
             self.create_subscription(String,'/navigation/cloud_filter/status',self.on_ground,5),
             self.create_subscription(String,'/navigation/memory/goal_candidate',self.on_goal,1),
             self.create_subscription(String,'/navigation/memory/reset',self.on_reset,1)]
-        self.timer=self.create_timer(.5,self.tick)
+        self.timer=self.create_timer(.2,self.tick)
+        self.display_timer=self.create_timer(1.,self.prepare_display)
+
+    def destroy_node(self):
+        self.worker.shutdown(wait=True,cancel_futures=True)
+        return super().destroy_node()
+
+    def prepare_display(self):
+        nearby=sorted(self.memory.cells.items(),key=lambda item:math.dist(self.memory.point(item[0]),self.origin))[:20000]
+        self.view=[[*self.memory.point(c),v[0]] for c,v in nearby]
+        self.display_pub.publish(String(data=json.dumps(dict(epoch=self.epoch,cells=self.view))))
+
+    @staticmethod
+    def candidate(memory,origin,goal,previous,now):
+        if previous and previous.get('partial') is False:
+            points=previous['points'];index=min(range(len(points)),key=lambda i:math.dist(origin,points[i]))
+            remaining=[origin]+points[index:]
+            if math.dist(origin,points[index])<=.4 and path_free(remaining,memory.resolution,memory.radius,
+                lambda c:memory.cells.get(c,(-1,0))[0]==0):return dict(previous,points=remaining)
+        return memory.route(origin,goal,now)
 
     def cache(self,name,msg):
         self.bundles.setdefault(stamp(msg),{})[name]=msg
@@ -47,6 +70,7 @@ class LioMemoryNode(Node):
 
     def reset(self):
         self.saved_route=None
+        self.view=[];self.next_plan=0.
         self.memory.cells.clear();self.memory.time=None;self.goal=None;self.bundles.clear();self.last_scan=0
         self.memory.hits.clear();self.memory.free_hits.clear()
         self.scan_rx=-math.inf
@@ -87,6 +111,7 @@ class LioMemoryNode(Node):
             if any(type(goal[k]) not in (int,float) or not math.isfinite(goal[k]) for k in ('x','y','request_time')):raise ValueError('Invalid goal numbers')
             if not -.1<=time.time()-goal['request_time']<=3 or math.dist(self.origin,(goal['x'],goal['y']))>100:raise ValueError('Stale/too distant goal')
             self.saved_route=None
+            self.next_plan=0.
             self.goal=(goal['x'],goal['y'],time.monotonic());self.reason='memory goal accepted for candidate planning only'
         except (ValueError,TypeError,KeyError) as exc:self.reason='Goal rejected: '+str(exc)
 
@@ -113,39 +138,33 @@ class LioMemoryNode(Node):
         self.memory.expire(now)
         ready=self.ready();route=None
         if self.goal and time.monotonic()-self.goal[2]>300:self.goal=None
+        if self.planning and self.planning[0].done():
+            future,epoch,goal=self.planning;self.planning=None
+            if epoch==self.epoch and goal==self.goal:
+                try:self.saved_route=future.result()
+                except ValueError as exc:self.saved_route=None;self.reason=str(exc)
         if ready and self.goal:
-            # Keep a complete route only while its remaining swept footprint is
-            # still free in the latest map. A transient replan cannot erase it.
-            if self.saved_route:
-                points=self.saved_route['points']
-                index=min(range(len(points)),key=lambda i:math.dist(self.origin,points[i]))
-                remaining=[self.origin]+points[index:]
-                if math.dist(self.origin,points[index])<=.4 and path_free(remaining,self.memory.resolution,self.memory.radius,
-                        lambda c:self.memory.cells.get(c,(-1,0))[0]==0):
-                    route=dict(self.saved_route,points=remaining)
-                else:self.saved_route=None
-            try:
-                if route is None:route=self.memory.route(self.origin,self.goal[:2],now)
-                if route and route['partial'] is False:self.saved_route=route
-            except ValueError as exc:self.reason=str(exc)
+            route=self.saved_route
+            if self.planning is None and time.monotonic()>=self.next_plan:
+                snapshot=copy.copy(self.memory);snapshot.cells=dict(self.memory.cells)
+                future=self.worker.submit(self.candidate,snapshot,self.origin,self.goal[:2],self.saved_route,now)
+                self.planning=(future,self.epoch,self.goal);self.next_plan=time.monotonic()+1.
         path=Path();path.header.frame_id=self.frame;path.header.stamp=self.get_clock().now().to_msg()
         if route:
             for x,y in route['points']:
                 p=PoseStamped();p.header=path.header;p.pose.position.x=x;p.pose.position.y=y;p.pose.orientation.w=1.;path.poses.append(p)
         self.path_pub.publish(path)  # Empty path explicitly invalidates an older candidate.
         if ready:self.publish_grid()
-        cells=sorted(self.memory.cells.items())
-        nearby=sorted(cells,key=lambda item:math.dist(self.memory.point(item[0]),self.origin))[:20000]
-        view=[[*self.memory.point(c),v[0]] for c,v in nearby]
         self.status.publish(String(data=json.dumps({'ready':ready,'frame':self.frame,'epoch':self.epoch,
-            'source_stamp':self.last_scan/1e9,'resolution_m':self.memory.resolution,'cells':view,
-            'cell_count':len(cells),'retention_sec':self.memory.retention,'goal':self.goal[:2] if self.goal else None,
+            'source_stamp':self.last_scan/1e9,'resolution_m':self.memory.resolution,
+            'cell_count':len(self.memory.cells),'retention_sec':self.memory.retention,'goal':self.goal[:2] if self.goal else None,
             'footprint_radius_m':self.memory.radius,
             'route':route,'reason':self.reason,'candidate_only':True,'base_link_ready':False,
             'scope':'planar visibility memory; no pit/terrain guarantee; no motor output'})))
 
     def publish_grid(self):
-        r=self.memory.resolution;cx,cy=self.memory.cell(self.origin);half=int(40/r);size=half*2
+        # Keep the existing 20m GPS off-road connector within the evidence grid.
+        r=self.memory.resolution;cx,cy=self.memory.cell(self.origin);half=int(24/r);size=half*2
         xmin,ymin=cx-half,cy-half
         data=np.full((size,size),-1,dtype=np.int8)
         for (x,y),(value,_) in self.memory.cells.items():

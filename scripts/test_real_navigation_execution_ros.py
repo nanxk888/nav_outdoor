@@ -107,6 +107,8 @@ def main():
             def select(x,y):
                 pubs['goal'].publish(String(data=json.dumps(dict(x=x,y=y,frame=memory.frame,epoch=memory.epoch,request_time=time.time()))))
                 step(1.2)
+                deadline=time.monotonic()+4.
+                while not control.local_state.get('ready') and time.monotonic()<deadline:step(.1)
                 assert control.local_state.get('ready'),control.local_state
             def begin():
                 control.enqueue('lio_navigate',dict(epoch=memory.epoch,goal=list(memory.goal[:2])))

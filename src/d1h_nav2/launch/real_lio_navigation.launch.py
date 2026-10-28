@@ -16,7 +16,7 @@ def configure(context):
     with open(os.path.join(share,'config','local_planner_5m.yaml')) as f:local=yaml.safe_load(f)
     controller=copy.deepcopy(base['controller_server']['ros__parameters'])
     controller.update(use_sim_time=False,odom_topic='/lio_navigation/odometry')
-    controller['goal_checker'].update(xy_goal_tolerance=.15,yaw_goal_tolerance=3.141593)
+    controller['goal_checker'].update(xy_goal_tolerance=.08,yaw_goal_tolerance=3.141593)
     controller['progress_checker'].update(required_movement_radius=.05,movement_time_allowance=20.)
     controller['FollowPath'].update(desired_linear_vel=.15,rotate_to_heading_angular_vel=.35,
                                     allow_reversing=False,rotate_to_heading_min_angle=.45,

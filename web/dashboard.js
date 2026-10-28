@@ -27,6 +27,7 @@
   for(const key of ['gps','gps_status','lio','lio_status']){const s=samples[key];let value=s?.value;if(typeof value==='string'){try{value=JSON.parse(value)}catch(e){/* retain raw string */}}$(key).textContent=s?`接收年龄 ${s.receive_age_sec.toFixed(2)} 秒\n`+JSON.stringify(value,null,2):'尚未收到该话题'}
   changed('连接','网页已连接');
   if(data.control)changed('控制',data.control.phase+' · '+reason(data.control.reason));
+  try{let v=samples.local_execution?.value;if(typeof v==='string')v=JSON.parse(v);changed('导航输入',v?.input_reason?reason(v.input_reason):'正常')}catch(e){}
   for(const name of ['local_execution','cloud_status','lio_status','reference']){let v=samples[name]?.value;if(typeof v==='string'){try{v=JSON.parse(v)}catch(e){continue}}if(v)changed(name,(v.state||'')+' · '+reason(String(v.reason||'').replace(/nav=\d+ clear=\d+/g,'点云有效')));}
   window.updateControl(data.control);window.NavMaps.update(data,true);
  }catch(e){changed('连接','网页连接中断');pill('connection','● 网关已断开',false);pill('gpsBadge','GPS 状态未知',false);pill('lioBadge','LIO 状态未知',false);window.updateControl(null);window.NavMaps.update(null,false)}finally{setTimeout(poll,500)}}

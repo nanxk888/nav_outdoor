@@ -298,6 +298,7 @@ def main():
     for topic, key in [('/localization/gnss/status', 'gps_status'),
                        ('/navigation/lio/status', 'lio_status'),
                        ('/navigation/cloud_filter/status','cloud_status'),('/navigation/memory/status','memory'),
+                       ('/navigation/memory/display','memory_display'),
                        ('/real_navigation/safety_status','reference'),('/navigation/local_execution/status','local_execution')]:
         subs.append(node.create_subscription(String, topic, lambda m, k=key: save(k, m.data), 10))
     subs.append(node.create_subscription(RosPath, '/plan', lambda m: save('plan', {

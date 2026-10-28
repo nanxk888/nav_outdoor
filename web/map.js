@@ -160,6 +160,7 @@
  window.NavMaps={show,draw,update(response,connected){online=connected;gps=response?.samples?.gps||null;lio=response?.samples?.lio||null;navCloud=response?.samples?.nav_cloud||null;cloudStatus=response?.samples?.cloud_status||null;
    reference=response?.samples?.reference||null;navPlan=response?.samples?.plan||null;if(reference&&typeof reference.value==='string'){try{reference={...reference,value:JSON.parse(reference.value)}}catch(e){reference=null}}
    memory=response?.samples?.memory||null;if(memory&&typeof memory.value==='string'){try{memory={...memory,value:JSON.parse(memory.value)}}catch(e){memory=null}}
+   try{const d=response?.samples?.memory_display,v=typeof d?.value==='string'?JSON.parse(d.value):d?.value;if(memory&&d?.receive_age_sec<2&&v?.epoch===memory.value.epoch)memory={...memory,value:{...memory.value,cells:v.cells}}}catch(e){}
    const execution=response?.samples?.local_execution;
    localExecution=null;try{if(execution)localExecution={...execution,value:typeof execution.value==='string'?JSON.parse(execution.value):execution.value}}catch(e){}
    try{const v=typeof execution?.value==='string'?JSON.parse(execution.value):execution?.value;$('localExecutionHint').textContent=connected&&execution&&execution.receive_age_sec<1?`${v.state} · ${v.reason} · ${v.ready?'完整路径输入就绪':'暂不可执行'}`:'本地执行器离线/状态过期'}catch(e){$('localExecutionHint').textContent='本地执行状态无效'}

@@ -15,6 +15,7 @@ from d1h_nav2.local_navigation_node import LocalNavigation
 from d1h_nav2.local_navigation import speed_limits
 from d1h_nav2.navigation_reference import body_heading
 from d1h_nav2.footprint import path_free
+from d1h_nav2.arrival import Arrival,approach_cap
 
 
 class LioNav2Executor(LocalNavigation):
@@ -28,6 +29,7 @@ class LioNav2Executor(LocalNavigation):
         self.follow_revision=0;self.next_plan=0.;self.cmd=(0.,0.);self.cmd_rx=-math.inf;self.blocked_since=None
         self.speed_mismatch_since=None
         self.plan_error=''
+        self.arrival=Arrival();self.arrival_stage='TRACKING'
         self.subs.extend([self.create_subscription(String,'/lio_navigation/speed_status',self.backend_status,1),
                           self.create_subscription(String,'/navigation/speed_limits',self.limits_input,1),
                           self.create_subscription(Twist,'/lio_navigation/cmd_vel',self.command,1)])
@@ -78,7 +80,7 @@ class LioNav2Executor(LocalNavigation):
         return value
 
     def command(self,msg):
-        if self.state!='ACTIVE' or not self.follow_active:return
+        if self.state!='ACTIVE' or not self.follow_active or self.arrival.since is not None:return
         v,w=msg.linear.x,msg.angular.z
         if any(not math.isfinite(x) for x in (v,w)) or v<-.00001 or v>1.00001 or abs(w)>.50001:
             self.state='STOPPED';self.reason='Invalid LIO Nav2 velocity';return
@@ -95,6 +97,7 @@ class LioNav2Executor(LocalNavigation):
         old_state=self.state;old_run=self.run_id
         super().request(msg)
         if self.state=='ACTIVE' and (old_state!='ACTIVE' or self.run_id!=old_run):
+            self.arrival=Arrival();self.arrival_stage='TRACKING'
             self.reference=list(self.path);self.plan_points=[];self.plan_error='';self.next_plan=0.;self.blocked_since=time.monotonic()
             self.reason='Computing rolling Smac path; RPP waiting'
         elif old_state=='ACTIVE' and self.state!='ACTIVE':self.cancel_backend()
@@ -122,7 +125,7 @@ class LioNav2Executor(LocalNavigation):
         goal.goal.header.frame_id='lio_odom';goal.goal.header.stamp=self.get_clock().now().to_msg()
         goal.goal.pose.position.x=float(local_goal[0]);goal.goal.pose.position.y=float(local_goal[1]);goal.goal.pose.orientation.w=1.
         def planned(f):
-            if self.run_id!=run or self.state!='ACTIVE':return
+            if self.run_id!=run or self.state!='ACTIVE' or self.arrival.since is not None:return
             self.plan_busy=False
             try:
                 result=f.result()
@@ -136,22 +139,25 @@ class LioNav2Executor(LocalNavigation):
                 def accepted(done):
                     try:h=done.result()
                     except Exception as exc:self.reason='RPP action response failed: '+str(exc);return
-                    if run!=self.run_id or self.state!='ACTIVE' or revision!=self.follow_revision:
+                    if run!=self.run_id or self.state!='ACTIVE' or revision!=self.follow_revision or self.arrival.since is not None:
                         if h.accepted:h.cancel_goal_async()
                         return
                     if not h.accepted:self.reason='RPP rejected local path';return
                     if not self.follow_active:self.cmd_rx=-math.inf
                     self.follow_handle=h;self.follow_active=True
-                    def finished(_):
+                    def finished(result_future):
                         if run==self.run_id and revision==self.follow_revision:
                             self.follow_active=False;self.next_plan=0.
+                            try:
+                                if result_future.result().status!=4:self.plan_error='RPP跟踪结束，重新规划'
+                            except Exception:self.plan_error='RPP结果不可用，重新规划'
                     h.get_result_async().add_done_callback(finished)
                 self.follower.send_goal_async(request).add_done_callback(accepted)
             except Exception as exc:self.plan_error=str(exc);self.reason=str(exc)
         def planner_accepted(f):
             try:h=f.result()
             except Exception as exc:self.plan_busy=False;self.reason='Smac action response failed: '+str(exc);return
-            if self.run_id!=run or self.state!='ACTIVE':
+            if self.run_id!=run or self.state!='ACTIVE' or self.arrival.since is not None:
                 if h.accepted:h.cancel_goal_async()
                 return
             if not h.accepted:self.plan_busy=False;self.reason='Smac rejected request';return
@@ -160,12 +166,25 @@ class LioNav2Executor(LocalNavigation):
 
     def tick(self):
         ready=False;v=w=0.;was_active=self.state=='ACTIVE'
+        terminal=self.reason if self.state in ('SUCCEEDED','STOPPED','REJECTED') else None
+        input_reason=None
         try:
             _,_,done,position=self.inputs();ready=True;now=time.monotonic()
             if self.state in ('IDLE','READY'):self.state='READY';self.reason='Smac/RPP ready; explicit full-path start required'
             if self.state=='ACTIVE':
                 if now-self.lease_rx>.3:raise ValueError('Local execution session lease expired')
-                if done:self.state='SUCCEEDED';self.reason='Local goal reached; holding zero'
+                q=self.odom.pose.pose.orientation;yaw=body_heading((q.x,q.y,q.z,q.w))
+                distance=math.dist(position,self.target)
+                stamp=self.odom.header.stamp.sec+self.odom.header.stamp.nanosec/1e9
+                previous_stage=self.arrival_stage
+                self.arrival_stage=self.arrival.update(position,yaw,stamp,distance,now)
+                if self.arrival_stage!='TRACKING':
+                    if previous_stage=='TRACKING':self.cancel_backend()
+                    self.reason='到站停车中：持续零速，等待LIO静止确认'
+                    if self.arrival_stage=='SETTLED':
+                        self.state='SUCCEEDED';self.reason='到达目标：零速保持，LIO静止已确认（非本体速度验证）'
+                    elif self.arrival_stage in ('OVERSHOOT','TIMEOUT'):
+                        raise ValueError('到站停车异常：越出0.25米范围或5秒未确认静止，请人工检查')
                 else:
                     if not self.plan_busy and now>=self.next_plan:self.plan(position)
                     points=[]
@@ -174,20 +193,25 @@ class LioNav2Executor(LocalNavigation):
                         points=[position]+self.plan_points[k:]
                     usable=bool(points) and self.follow_active and now-self.cmd_rx<.3
                     if usable:
-                        v,w=self.cmd;self.blocked_since=None;self.reason='正在导航：Smac规划／RPP跟踪'
+                        v,w=self.cmd
+                        scale=min(1.,approach_cap(distance)/max(v,1e-9));v*=scale;w*=scale
+                        self.blocked_since=None;self.reason='接近目标：减速中' if distance<.8 else '正在导航：Smac规划／RPP跟踪'
                     else:
                         v=w=0.;self.reason='Holding zero; '+(self.plan_error or 'waiting for valid Smac path/RPP velocity')
                         if self.blocked_since is None:self.blocked_since=now
                         self.reason='等待通路／重新规划：'+(self.plan_error or '等待RPP速度')
         except (ValueError,TypeError,KeyError,OverflowError) as exc:
+            input_reason=str(exc)
             self.reason=str(exc)
             if self.state=='ACTIVE':self.state='STOPPED'
             elif self.state=='READY':self.state='IDLE'
+        if terminal is not None:self.reason=terminal
         if self.state!='ACTIVE' and (was_active or self.follow_active or self.plan_busy or self.follow_handle or self.planner_handle):self.cancel_backend()
         self.pub.publish(String(data=json.dumps(dict(stamp=self.get_clock().now().nanoseconds/1e9,ready=ready,
-            state=self.state,reason=self.reason,run_id=self.run_id,epoch=self.memory.get('epoch'),goal=self.memory.get('goal'),
+            state=self.state,reason=self.reason,input_reason=input_reason,run_id=self.run_id,epoch=self.memory.get('epoch'),goal=self.memory.get('goal'),
             v=v,w=w,speed_limits=self.speed_limits,gps_required=False,controller='Nav2 RPP',planner='SmacPlanner2D',
-            plan=self.plan_points if self.state=='ACTIVE' else [],main_path=self.reference))))
+            plan=self.plan_points if self.state=='ACTIVE' else [],main_path=self.reference,
+            arrival_stage=self.arrival_stage,goal_distance_m=math.dist(position,self.target) if self.target and 'position' in locals() else None))))
 
 
 def main():
