@@ -2,6 +2,7 @@
 set -eo pipefail
 cd "$(dirname "$0")/.."
 WORKSPACE_DIR="$PWD"
+export PYTHONPATH="$WORKSPACE_DIR/.local/patchworkpp${PYTHONPATH:+:$PYTHONPATH}"
 # Hold a checkout-local lock across exec to reject duplicate unified launches.
 mkdir -p .local
 exec 200>.local/real_workspace.lock
