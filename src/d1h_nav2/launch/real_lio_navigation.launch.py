@@ -33,7 +33,7 @@ def configure(context):
         always_send_full_costmap=True,plugins=['observed_space','inflation_layer'],
         observed_space=dict(plugin='nav2_costmap_2d::StaticLayer',map_topic='/navigation/memory/grid',
                             map_subscribe_transient_local=False,subscribe_to_updates=False),
-        inflation_layer=dict(plugin='nav2_costmap_2d::InflationLayer',inflation_radius=.2,cost_scaling_factor=5.))
+        inflation_layer=dict(plugin='nav2_costmap_2d::InflationLayer',inflation_radius=.25,cost_scaling_factor=5.))
     params={'/lio_nav/controller_server':{'ros__parameters':controller},
             '/lio_nav/planner_server':{'ros__parameters':planner},
             '/lio_nav/velocity_smoother':{'ros__parameters':smoother},
