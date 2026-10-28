@@ -21,9 +21,11 @@ class Nav2SpeedSync(Node):
         self.desired=dict(linear_mps=.15,angular_rps=.35);self.applied=None
         self.state='WAIT';self.reason='Waiting for Nav2 parameter services'
         self.pending=None;self.retry=0.;self.verify_at=0.
-        self.setters={n:self.create_client(SetParametersAtomically,f'/{n}/set_parameters_atomically') for n in targets(self.desired)}
-        self.getters={n:self.create_client(GetParameters,f'/{n}/get_parameters') for n in targets(self.desired)}
-        self.pub=self.create_publisher(String,'/real_navigation/speed_status',1)
+        prefix=self.get_namespace().rstrip('/')
+        self.setters={n:self.create_client(SetParametersAtomically,f'{prefix}/{n}/set_parameters_atomically') for n in targets(self.desired)}
+        self.getters={n:self.create_client(GetParameters,f'{prefix}/{n}/get_parameters') for n in targets(self.desired)}
+        self.declare_parameter('status_topic','/real_navigation/speed_status')
+        self.pub=self.create_publisher(String,self.get_parameter('status_topic').value,1)
         self.sub=self.create_subscription(String,'/navigation/speed_limits',self.request,1)
         self.timer=self.create_timer(.1,self.tick)
 

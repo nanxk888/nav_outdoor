@@ -33,6 +33,8 @@ def main():
     def memory(msg):
         if state(msg).get('ready') is True:done('memory','LIO observation memory ready; candidate planning only, no motor output')
     def local_execution(msg):done('local','GPS-free local executor running; explicit full-path start required; '+str(state(msg).get('reason','waiting')))
+    def lio_backend(msg):
+        if state(msg).get('ready') is True:done('lio_nav2','GPS-free Smac/RPP parameter services ready; sensor/goal checks still required')
     registered=False
     def reference(msg):
         nonlocal registered
@@ -46,7 +48,8 @@ def main():
         if len(cloud_seen)==2 and ground.get('ready'):done('cloud','ground accepted; both nav/clear streams received')
     for topic,callback in [('/navigation/lio/status',lio),('/localization/gnss/status',gate),
                            ('/navigation/cloud_filter/status',cloud_status),('/navigation/memory/status',memory),
-                           ('/real_navigation/safety_status',reference),('/navigation/local_execution/status',local_execution)]:
+                           ('/real_navigation/safety_status',reference),('/navigation/local_execution/status',local_execution),
+                           ('/lio_navigation/speed_status',lio_backend)]:
         subs.append(node.create_subscription(String,topic,callback,10))
     subs.append(node.create_subscription(NavSatFix,'/hardware/gnss/fix',gps,qos_profile_sensor_data))
     for name in ('nav','clear'):

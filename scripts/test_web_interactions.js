@@ -1,12 +1,12 @@
 // Application interaction unit test in a fake DOM; not browser visual QA.
 const assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
-const messages=[],posts=[],els=new Map();let obstacleDraws=0,trajectorySegments=0;
+const messages=[],posts=[],els=new Map();let obstacleDraws=0,trajectorySegments=0,localPlanSegments=0;
 class Element{
  constructor(id){this.id=id;this.textContent='';this.value='';this.handlers={};this.flags=new Set(id==='lioView'?['is-main']:id==='gpsView'?['is-mini']:[]);this.classList={toggle:(key,on)=>on?this.flags.add(key):this.flags.delete(key)}}
  addEventListener(name,fn){this.handlers[name]=fn}
  setPointerCapture(){}
  getBoundingClientRect(){const main=els.get(this.id==='osm'?'gpsView':'lioView')?.flags.has('is-main');return {left:0,top:0,width:main?1200:300,height:main?800:205}}
- getContext(){let segments=0;return new Proxy({}, {get:(target,key)=>key in target?target[key]:(...args)=>{if(key==='beginPath')segments=0;if(key==='lineTo')segments++;if(key==='stroke'&&target.strokeStyle==='#6bdcc6')trajectorySegments=segments;if(key==='fillRect')obstacleDraws++;if(['arc','moveTo','lineTo','fillRect'].includes(key))assert(args.every(Number.isFinite))}})}
+ getContext(){let segments=0;return new Proxy({}, {get:(target,key)=>key in target?target[key]:(...args)=>{if(key==='beginPath')segments=0;if(key==='lineTo')segments++;if(key==='stroke'&&target.strokeStyle==='#6bdcc6')trajectorySegments=segments;if(key==='stroke'&&target.strokeStyle==='#82bafa')localPlanSegments=segments;if(key==='fillRect')obstacleDraws++;if(['arc','moveTo','lineTo','fillRect'].includes(key))assert(args.every(Number.isFinite))}})}
 }
 const $=id=>{if(!els.has(id))els.set(id,new Element(id));return els.get(id)};
 $('lioView');$('gpsView');
@@ -57,6 +57,11 @@ async function click(x,y){$('osm').handlers.pointerdown(event(x,y));await $('osm
  scan.memory={receive_age_sec:0,value:JSON.stringify({ready:true,frame:'lio_odom',epoch:'memory-test',source_stamp:now,
   resolution_m:.25,cells:[[0,0,0],[2,0,100]],cell_count:2,retention_sec:120,route:{points:[[0,0],[1,0]],partial:true},reason:'test'})};
  context.NavMaps.update({samples:scan},true);assert($('memoryHint').textContent.includes('观察记忆'));
+ scan.local_execution={receive_age_sec:0,value:JSON.stringify({state:'ACTIVE',epoch:'memory-test',plan:[[0,0],[.5,.5],[1,0]]})};
+ context.NavMaps.update({samples:scan},true);assert.equal(localPlanSegments,2,'active Smac path must replace candidate preview');
+ const candidate=JSON.parse(scan.memory.value);candidate.route.partial=false;scan.memory.value=JSON.stringify(candidate);
+ scan.local_execution.receive_age_sec=2;context.NavMaps.update({samples:scan},true);
+ assert.equal(localPlanSegments,1,'expired execution must not display stale Smac path');
  $('pickLioGoal').onclick();$('plot').handlers.pointerdown(event(600,400));await $('plot').handlers.pointerup(event(600,400));
  assert.equal(posts.at(-1)[0],'/api/operator/lio_goal');assert.equal(posts.at(-1)[1].epoch,'memory-test');
  assert.equal(scan.gps.value.valid,false,'GPS-free local goal must work without valid GPS');

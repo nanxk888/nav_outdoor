@@ -7,14 +7,15 @@
  let features=[],bounds=null,loadError='',gps=null,lio=null,navCloud=null,cloudStatus=null,online=false,receivedAt=0;
  let active='lio',mode='pan',goal=null,heading=null,follow=true,trajectory=[],lastStamp=null;
  let alignment=null,lastEpoch=null,lastFrame=null,geoFollow=true;
- let memory=null,localGoal=null,lastMemoryEpoch=null;
+ let memory=null,localGoal=null,lastMemoryEpoch=null,localExecution=null;
  let reference=null,navPlan=null,initialLioHeading=null;
  function memoryReady(){return goodLio()&&memory&&age(memory)<1.5&&memory.value?.ready&&memory.value.frame===lio.value.frame&&Math.abs(memory.value.source_stamp-lio.value.stamp)<1}
  function drawMemory(ctx,camera,convert){
   if(!memoryReady())return;
   const m=memory.value,half=m.resolution_m/2;
   for(const cell of (m.cells||[]).slice(0,3000)){ctx.fillStyle=cell[2]===100?'#d5786b88':'#5fa89622';ctx.beginPath();[[-half,-half],[half,-half],[half,half],[-half,half]].forEach(([dx,dy],i)=>{const p=camera.screen(convert([cell[0]+dx,cell[1]+dy]));i?ctx.lineTo(...p):ctx.moveTo(...p)});ctx.closePath();ctx.fill()}
-  if(m.route?.points){ctx.strokeStyle=m.route.partial?'#f4cd71':'#82bafa';ctx.lineWidth=3;ctx.beginPath();m.route.points.forEach((p,i)=>{const v=camera.screen(convert(p));i?ctx.lineTo(...v):ctx.moveTo(...v)});ctx.stroke()}
+  const e=localExecution?.value,route=e?.state==='ACTIVE'&&age(localExecution)<1&&e.epoch===m.epoch&&e.plan?.length?{points:e.plan,partial:false}:m.route;
+  if(route?.points){ctx.strokeStyle=route.partial?'#f4cd71':'#82bafa';ctx.lineWidth=3;ctx.beginPath();route.points.forEach((p,i)=>{const v=camera.screen(convert(p));i?ctx.lineTo(...v):ctx.moveTo(...v)});ctx.stroke()}
  }
  async function memoryGoal(p){
   localGoal={point:p,epoch:memory?.value?.epoch};draw();
@@ -159,6 +160,7 @@
    reference=response?.samples?.reference||null;navPlan=response?.samples?.plan||null;if(reference&&typeof reference.value==='string'){try{reference={...reference,value:JSON.parse(reference.value)}}catch(e){reference=null}}
    memory=response?.samples?.memory||null;if(memory&&typeof memory.value==='string'){try{memory={...memory,value:JSON.parse(memory.value)}}catch(e){memory=null}}
    const execution=response?.samples?.local_execution;
+   localExecution=null;try{if(execution)localExecution={...execution,value:typeof execution.value==='string'?JSON.parse(execution.value):execution.value}}catch(e){}
    try{const v=typeof execution?.value==='string'?JSON.parse(execution.value):execution?.value;$('localExecutionHint').textContent=connected&&execution&&execution.receive_age_sec<1?`${v.state} · ${v.reason} · ${v.ready?'完整路径输入就绪':'暂不可执行'}`:'本地执行器离线/状态过期'}catch(e){$('localExecutionHint').textContent='本地执行状态无效'}
    // A changed backend epoch acknowledges reset (also covers resets from another tab).
    const memoryEpoch=memory?.value?.epoch;

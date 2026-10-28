@@ -46,10 +46,12 @@ class LocalNavigation(Node):
             self.cache(key,value)
         except (ValueError,TypeError):setattr(self,key,{})
 
-    def inputs(self):
+    def inputs(self,validate_tracking=True):
         now=time.monotonic();ros=self.get_clock().now().nanoseconds/1e9
-        if any(len(self.get_publishers_info_by_topic(topic))>1 for topic in ('/navigation/lio/odometry','/navigation/memory/grid','/navigation/memory/status')):
-            raise ValueError('Conflicting LIO/memory publishers; stop duplicate instances')
+        if now>=getattr(self,'graph_check_at',0.):
+            self.graph_check_at=now+.5
+            self.graph_conflict=any(len(self.get_publishers_info_by_topic(topic))>1 for topic in ('/navigation/lio/odometry','/navigation/memory/grid','/navigation/memory/status'))
+        if self.graph_conflict:raise ValueError('Conflicting LIO/memory publishers; stop duplicate instances')
         def fresh(key,limit):return now-self.rx.get(key,-math.inf)<limit
         def age(msg):return ros-msg.header.stamp.sec-msg.header.stamp.nanosec/1e9
         if not fresh('odom',.4) or self.odom is None or not -.05<=age(self.odom)<.4:raise ValueError('LIO stale')
@@ -70,6 +72,7 @@ class LocalNavigation(Node):
         i=self.grid.info;o=i.origin
         if abs(o.orientation.w-1)>1e-6 or abs(o.orientation.x)+abs(o.orientation.y)+abs(o.orientation.z)>1e-6:raise ValueError('Nonplanar grid origin')
         points=self.path if self.state=='ACTIVE' else r['points']
+        if not validate_tracking:return 0.,0.,math.dist(xyz,g)<=.15,xyz
         v,w,done=track(xyz,yaw,g,points,(i.resolution,i.width,i.height,o.position.x,o.position.y,self.grid.data),
                        max_linear=self.speed_limits['linear_mps'],max_angular=self.speed_limits['angular_rps'])
         return v,w,done,xyz

@@ -107,7 +107,7 @@ def configure(context):
         Node(package='nav2_lifecycle_manager',executable='lifecycle_manager',name='lifecycle_manager_navigation',
              parameters=[{'use_sim_time':False,'autostart':True,'node_names':['controller_server','planner_server','behavior_server','bt_navigator','velocity_smoother']}],
              arguments=['--ros-args','--log-level','error']),
-        Node(package='d1h_nav2',executable='osm_road_planner',output='screen',parameters=[{'profile':profile,'use_sim_time':False,'robot_frame':'navigation_base','access_half_width_m':.9}]),
+        Node(package='d1h_nav2',executable='osm_road_planner',output='screen',parameters=[{'profile':profile,'use_sim_time':False,'robot_frame':'navigation_base','access_half_width_m':.25}]),
         Node(package='d1h_nav2',executable='stable_planner',output='screen',
              parameters=[os.path.join(share,'config','stable_planner.yaml'),{'use_sim_time':False,'robot_frame':'navigation_base'}],
              remappings=[('/compute_path_to_pose','/roads/compute_path_to_pose'),('/is_path_valid','/roads/is_path_valid')]),

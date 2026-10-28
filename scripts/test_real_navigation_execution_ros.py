@@ -26,7 +26,7 @@ from std_msgs.msg import String,Header
 from lifecycle_msgs.srv import GetState
 from d1h_nav2.navigation_reference_node import NavigationReference,stamp
 from d1h_nav2.lio_memory_node import LioMemoryNode
-from d1h_nav2.local_navigation_node import LocalNavigation
+from d1h_nav2.lio_nav2_executor import LioNav2Executor as LocalNavigation
 from navigation_control import Control
 from robot_policy import ReceiverPolicy
 from robot_wire import encode,decode
@@ -66,7 +66,8 @@ def main():
         reference=NavigationReference();memory=LioMemoryNode();fixture=rclpy.create_node('execution_test_fixture')
         control=Control(fixture);executor=SingleThreadedExecutor()
         nodes=[reference,memory,fixture]
-        if local_test:nodes.append(LocalNavigation())
+        local_executor=None
+        if local_test:local_executor=LocalNavigation();nodes.append(local_executor)
         for n in nodes:executor.add_node(n)
         pubs={k:fixture.create_publisher(t,topic,10) for k,t,topic in [
             ('odom',Odometry,'/navigation/lio/odometry'),('gps',NavSatFix,'/hardware/gnss/fix'),
@@ -112,7 +113,9 @@ def main():
                 deadline=time.monotonic()+3
                 while control.phase!='NAVIGATING' and time.monotonic()<deadline:step(.1)
                 assert control.phase=='NAVIGATING',(control.status(),control.local_state)
-                step(.3)
+                end_command=time.monotonic()+3
+                while local_executor.cmd==(0.,0.) and time.monotonic()<end_command:step(.1)
+                step(.2)
             assert reference.anchor is None,'No GPS anchor is allowed in this test'
             pubs['goal'].publish(String(data=json.dumps(dict(x=10.,y=10.,frame=memory.frame,epoch=memory.epoch,request_time=time.time()))))
             step(1.2);assert not control.local_state.get('ready'),control.local_state
@@ -131,8 +134,9 @@ def main():
             select(1.7,0.);begin();sdk_on[0]=False;step(.6)
             assert control.phase=='STOPPED' and not policy.active
             sdk_on[0]=True;step(.6);assert control.phase=='STOPPED'
-            select(1.7,0.);begin();obstacles.append([1.4,0.,.2]);step(.9)
-            assert control.phase=='STOPPED' and not policy.active,'New obstacle must stop task'
+            select(2.7,0.);begin();obstacles.append([1.8,0.,.2]);step(2.)
+            assert control.phase=='NAVIGATING' and any(abs(p[1])>.2 for p in local_executor.plan_points),('Smac must reroute around obstacle',control.status(),local_executor.reason)
+            control.enqueue('stop',{});step(.5)
             obstacles.clear();pubs['reset'].publish(String(data=json.dumps(dict(epoch=memory.epoch,request_time=time.time()))));step(1.2)
             assert control.phase=='STOPPED','Memory reset/recovery cannot resume'
             select(1.7,0.);begin()
@@ -147,9 +151,24 @@ def main():
             assert control.phase=='STOPPED' and 'lease' in control.reason and not policy.active,control.status()
             control.timer.reset()
             assert all(0<=v<=.15 and abs(w)<=.35 for v,w in received)
+            control.enqueue('speed_limits',dict(linear_mps=.4,angular_rps=.5));step(2.)
+            select(2.7,0.);index=len(received);begin();step(1.)
+            assert any(v>.15 for v,w in received[index:]),('LIO RPP must apply frontend speed, not the old fixed ceiling',control.status(),local_executor.backend)
+            assert all(0<=v<=.400001 and abs(w)<=.500001 for v,w in received[index:])
+            control.enqueue('speed_limits',dict(linear_mps=.1,angular_rps=.1));step(1.)
+            index=len(received);step(.5)
+            assert control.phase=='NAVIGATING' and all(v<=.100001 and abs(w)<=.100001 for v,w in received[index:]),control.status()
+            control.enqueue('stop',{});step(.5)
             assert not modes and not server_errors
-            print('PASS: GPS-free full memory path -> local forward/turn -> authenticated LOOPBACK UDP; partial rejected, arrival zero, obstacle/reset/sensor/SDK/FSM/browser/lease stop, no auto resume or mode commands')
+            print('PASS: GPS-free Smac/RPP -> local forward/turn -> authenticated LOOPBACK UDP; partial rejected, arrival zero, obstacle reroute, reset/sensor/SDK/FSM/browser/lease stop, no auto resume or mode commands')
         try:
+            if local_test:
+                child=subprocess.Popen(['ros2','launch','d1h_nav2','real_lio_navigation.launch.py'],stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
+                deadline=time.monotonic()+40
+                while time.monotonic()<deadline:
+                    step(.2)
+                    if local_executor.planner.server_is_ready() and local_executor.follower.server_is_ready() and local_executor.backend.get('ready'):break
+                assert local_executor.planner.server_is_ready() and local_executor.backend.get('ready'),local_executor.backend
             step(2.)
             if local_test:
                 local_scenarios();return

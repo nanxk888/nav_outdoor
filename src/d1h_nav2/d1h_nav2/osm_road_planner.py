@@ -18,6 +18,7 @@ from nav2_msgs.action import ComputePathToPose
 from nav2_msgs.srv import IsPathValid
 from tf2_ros import Buffer, TransformListener
 from d1h_nav2.osm_roads import RoadGraph, sample
+from d1h_nav2.footprint import circle_cells
 
 
 class OsmRoadPlanner(Node):
@@ -25,10 +26,10 @@ class OsmRoadPlanner(Node):
         super().__init__('osm_road_planner')
         self.declare_parameter('profile', '')
         self.declare_parameter('robot_frame','base_link')
-        self.declare_parameter('access_half_width_m',.5)
+        self.declare_parameter('access_half_width_m',.25)
         self.robot_frame=self.get_parameter('robot_frame').value
         self.access_width=float(self.get_parameter('access_half_width_m').value)
-        if not .5<=self.access_width<=2:raise ValueError('Invalid connector half width')
+        if not .25<=self.access_width<=2:raise ValueError('Invalid connector half width')
         with open(self.get_parameter('profile').value, encoding='utf-8') as f:
             profile=json.load(f)
         self.roads=RoadGraph(profile['osm_file'],profile['datum_latitude_deg'],
@@ -107,12 +108,10 @@ class OsmRoadPlanner(Node):
             # Conservative circular footprint stencil; every tested cell must be observed free.
             res=grid.info.resolution
             if not .1<=res<=1 or len(grid.data)!=grid.info.width*grid.info.height:return False
-            radius=self.access_width+res*.71;n=math.ceil(radius/res)
-            for x in range(-n,n+1):
-                for y in range(-n,n+1):
-                    if math.hypot(x,y)*res>radius:continue
-                    aa=convert((a[0]+x*res,a[1]+y*res));bb=convert((b[0]+x*res,b[1]+y*res))
-                    if not self.clear(grid,aa,bb):return False
+            ox,oy=grid.info.origin.position.x,grid.info.origin.position.y
+            for p in sample(convert(a),convert(b),res/8):
+                for ix,iy in circle_cells(p,res,self.access_width,(ox,oy)):
+                    if not (0<=ix<grid.info.width and 0<=iy<grid.info.height) or grid.data[iy*grid.info.width+ix]!=0:return False
             return True
         except Exception:return False
 
@@ -160,7 +159,7 @@ class OsmRoadPlanner(Node):
             grid=self.snapshot();q=request.goal.pose.position
             points=self.roads.route((p.x,p.y),(q.x,q.y),lambda a,b:self.clear(grid,a,b),
                                     offroad_start_limit=self.offroad_limit,connector_clear=self.observed_connector)
-            if self.roads.distance((p.x,p.y))>min(2.,self.roads.width/2-.32):self.publish_access(points[0],points[1])
+            if self.roads.distance((p.x,p.y))>min(2.,self.roads.width/2-.25):self.publish_access(points[0],points[1])
             path=Path();path.header.frame_id='map';path.header.stamp=self.get_clock().now().to_msg()
             for a,b in zip(points,points[1:]):
                 yaw=math.atan2(b[1]-a[1],b[0]-a[0])

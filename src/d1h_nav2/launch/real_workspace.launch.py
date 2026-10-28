@@ -97,6 +97,8 @@ def configure(context):
                    arguments=['--ros-args','--log-level',arg('log_level')],output='screen')
         critical.append(cloud)
     if enabled('with_memory'):
+        critical.append(ExecuteProcess(cmd=['ros2','launch','d1h_nav2','real_lio_navigation.launch.py'],
+                                       output='screen',name='lio_nav2_backend'))
         critical.append(Node(package='d1h_nav2',executable='lio_memory',name='lio_observed_memory',
             parameters=[{'use_sim_time':False,'footprint_radius_m':.25}],arguments=['--ros-args','--log-level',arg('log_level')],output='screen'))
         critical.append(Node(package='d1h_nav2',executable='local_navigation',name='lio_local_navigation',
@@ -121,7 +123,7 @@ def configure(context):
         actions.append(RegisterEventHandler(OnProcessExit(target_action=process,on_exit=report_process_exit)))
     actions.extend(critical)
     checks=['reference']
-    if enabled('with_memory'):checks.append('local')
+    if enabled('with_memory'):checks.extend(['local','lio_nav2'])
     for flag,label in [('with_lio','lio'),('with_gps_bridge','gps'),('with_gnss_gate','gate'),
                        ('with_nav_cloud','cloud'),('with_memory','memory'),('with_web','web'),('with_nav','nav')]:
         if enabled(flag):checks.append(label)

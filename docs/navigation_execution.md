@@ -2,7 +2,8 @@
 
 For the separate GPS-free short-range full-path mode, see
 [lio_local_navigation.md](lio_local_navigation.md). It does not need this geographic
-registration or the Nav2 launch. Partial/frontier exploration remains preview-only.
+registration. It starts its own namespaced Smac/RPP backend independently of the
+geographic Nav2 launch. Partial/frontier exploration remains preview-only.
 
 Robot forward is the red emergency-stop-button side. The operator confirmed Livox
 IMU +X was initially assumed forward, but the operator's front-chair check confirmed
@@ -29,7 +30,8 @@ height after standing. No SDK mode is required to start perception or the web UI
 
 Nav2 is now selected by default, but waits for a fresh GPS/LIO initial registration.
 An omitted `nav_profile` uses the project's OSM file and example datum; an explicit
-profile can override geometry/datum. `with_nav:=false` disables Nav2 startup.
+profile can override geometry/datum. `with_nav:=false` disables geographic Nav2
+startup only; GPS-free `/lio_nav` remains available with observed memory enabled.
 
 1. Keep the robot stationary, enter its actual compass heading (north 0, east 90),
    and click **GPS + direction alignment / navigation registration** in the web UI.
@@ -48,13 +50,14 @@ profile can override geometry/datum. `with_nav:=false` disables Nav2 startup.
 orientation for the IMU/sensor transform. This is a planar projected reference, NOT
 a calibrated vendor `base_link`. GPS/IMU co-location and IMU +X/body-forward are
 operator-supplied approximations, with the 180 degree field correction above taking
-precedence over the former +X assumption. The circular 0.6 m footprint is a provisional
-conservative planning model, not a measured robot outline.
+precedence over the former +X assumption. The provisional 0.6 m footprint radius
+was replaced with the operator-measured 0.25 m radius (0.5 m diameter),
+with zero additional footprint padding; inflation remains separate.
 
 GPS plus manual heading initializes `map -> odom`. This is **initial registration,
 not continuous GNSS/LIO fusion**. GPS loss after registration permits LIO dead
 reckoning, with accumulating drift. Starting without GPS does not locate an arbitrary
-geographic goal; the native LIO memory tool remains a candidate planner only.
+geographic goal; use the separate native-LIO short-range Smac/RPP mode instead.
 
 OSM A* -> stable global route -> rolling 5 m local Smac plan with filtered live
 clouds -> regulated pure pursuit -> velocity smoother ->
@@ -86,7 +89,10 @@ not a hardware emergency stop.
 
 Road IDs/approval booleans are not mandatory. Off-road start access is bounded to
 20 m and still requires observed-free evidence across the whole connector, now
-including the configured corridor clearance. Unknown/blocked space is not silently
+including the measured 0.25 m footprint clearance. Projection is onto the nearest
+road segment; the real starting position is retained. Only the straight connector
+to that nearest segment is tried: there is no alternative entrance search or curved
+off-road access planner. Unknown/blocked space is not silently
 opened. Automatic frontier exploration and frontier-to-road handoff are NOT wired
 to actuation. Off-road destinations are not yet supported by this road planner.
 

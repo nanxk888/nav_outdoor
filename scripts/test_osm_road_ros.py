@@ -45,6 +45,16 @@ def main():
         access.info.resolution=.25;access.info.width=100;access.info.height=100
         access.info.origin.position.x=-10.;access.info.origin.position.y=-10.;access.info.origin.orientation.w=1.
         access.data=array('b',[0]*10000);node.on_access(access)
+        assert node.access_width==.25,'GPS access must use the measured 0.25m radius'
+        assert node.observed_connector((5.,-4.),(5.,0.))
+        # A cell outside the circular sweep must not add the old square padding.
+        ix=int((5.375+10)/.25);iy=int((-2.+10)/.25)
+        access.data[iy*100+ix]=100
+        assert node.observed_connector((5.,-4.),(5.,0.))
+        ix=int((5.125+10)/.25)
+        access.data[iy*100+ix]=-1
+        assert not node.observed_connector((5.,-4.),(5.,0.)),'unknown inside footprint must reject access'
+        access.data=array('b',[0]*10000)
         goal.start.pose.position.x=5.;goal.start.pose.position.y=-4.
         goal.goal.pose.position.x=8.;goal.goal.pose.position.y=0.
         result=wait(wait(client.send_goal_async(goal)).get_result_async())

@@ -71,7 +71,7 @@ class RoadGraph:
             candidates = [(math.dist(p,q),i,q) for i,(a,b,_) in enumerate(self.edges)
                           for q in [nearest(p,self.xy[a],self.xy[b])]]
             d,i,q = min(candidates)
-            in_corridor=d <= min(snap_limit,self.width/2-.32)
+            in_corridor=d <= min(snap_limit,self.width/2-.25)
             if not in_corridor:
                 if index!=0 or not 0<offroad_start_limit<=30 or d>offroad_start_limit or connector_clear is None or not connector_clear(p,q):
                     raise ValueError('Off-road start needs bounded observed-free access; off-road goal remains unsupported')
@@ -92,7 +92,7 @@ class RoadGraph:
                 if direction!='-1':link(u,v)
                 if direction not in {'yes','1','true'}:link(v,u)
         # Do not snap/teleport the robot pose. Keep the true start in the path.
-        if self.distance(start)>min(snap_limit,self.width/2-.32):
+        if self.distance(start)>min(snap_limit,self.width/2-.25):
             graph.setdefault('S',[]).append(('P',math.dist(start,xy['P'])))
         else:link('S','P');link('P','S')
         link('Q','G');link('G','Q')
