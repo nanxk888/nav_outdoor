@@ -97,7 +97,6 @@ class LocalNavigation(Node):
             self.speed_limits=speed_limits(r.get('speed_limits',dict(linear_mps=.15,angular_rps=.35)))
             _,_,_,p=self.inputs()
             if r['epoch']!=self.memory.get('epoch') or r['goal']!=self.memory.get('goal'):raise ValueError('Selected local goal changed')
-            if not .15<math.dist(p,r['goal'])<=2.5:raise ValueError('First stage goal must be 0.15..2.5m away')
             self.run_id=r['run_id'];self.target=list(r['goal']);self.epoch=r['epoch'];self.state='ACTIVE';self.reason='Tracking full observed path'
             self.path=[tuple(p[:2]) for p in self.memory['route']['points']]
             self.started=time.monotonic();self.lease_rx=self.started;self.last_request=r['request_time']

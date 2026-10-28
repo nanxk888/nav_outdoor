@@ -164,6 +164,9 @@ def main():
             local_executor.started-=65.;local_executor.next_plan=0.;step(1.)
             assert control.phase=='NAVIGATING','No fixed 60-second task deadline'
             control.enqueue('stop',{});step(.5)
+            select(4.5,0.);begin();step(.3)
+            assert control.phase=='NAVIGATING',('Observed goal beyond 2.5m must be accepted',control.status())
+            control.enqueue('stop',{});step(.5)
             assert not modes and not server_errors
             print('PASS: GPS-free Smac/RPP -> local forward/turn -> authenticated LOOPBACK UDP; partial rejected, arrival zero, obstacle reroute, reset/sensor/SDK/FSM/browser/lease stop, no auto resume or mode commands')
         try:

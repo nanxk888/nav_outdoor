@@ -128,7 +128,7 @@ class LioNav2Executor(LocalNavigation):
                 result=f.result()
                 if result.status!=4 or not result.result.path.poses:raise ValueError('Smac found no current local path')
                 path=result.result.path;points=[(p.pose.position.x,p.pose.position.y) for p in path.poses]
-                if len(points)>4000 or not all(math.isfinite(v) for p in points for v in p) or sum(math.dist(a,b) for a,b in zip(points,points[1:]))>6.:
+                if len(points)>4000 or not all(math.isfinite(v) for p in points for v in p):
                     raise ValueError('Smac path exceeds local geometry budget')
                 if path.header.frame_id!='lio_odom':raise ValueError('Smac path frame mismatch')
                 self.plan_error='';self.plan_points=points;self.follow_revision+=1;revision=self.follow_revision
