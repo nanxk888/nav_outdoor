@@ -2,7 +2,7 @@
 import math
 
 DEFAULT_LIMITS={'linear_mps':.15,'angular_rps':.35}
-MAX_LIMITS={'linear_mps':1.,'angular_rps':.5}
+MAX_LIMITS={'linear_mps':1.,'angular_rps':1.5}
 
 
 def validate_limits(value):

@@ -5,7 +5,7 @@ from d1h_nav2.footprint import circle_cells
 
 def speed_limits(value):
     if not isinstance(value,dict) or set(value)!={'linear_mps','angular_rps'}:raise ValueError('Invalid local speed limits')
-    for key,maximum in (('linear_mps',1.),('angular_rps',.5)):
+    for key,maximum in (('linear_mps',1.),('angular_rps',1.5)):
         v=value[key]
         if type(v) not in (int,float) or not math.isfinite(v) or not .1<=v<=maximum:raise ValueError('Local speed limits out of range')
     return dict(value)

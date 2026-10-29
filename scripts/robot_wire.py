@@ -32,6 +32,6 @@ def decode(packet, key):
 def velocity(v, w):
     if any(type(x) not in (float, int) or not math.isfinite(x) for x in (v, w)):
         raise ValueError('invalid velocity')
-    if not 0 <= v <= 1. or abs(w) > .5:
+    if not 0 <= v <= 1. or abs(w) > 1.5:
         raise ValueError('outside commissioning limits')
     return v, w

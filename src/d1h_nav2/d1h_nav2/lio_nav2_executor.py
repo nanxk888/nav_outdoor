@@ -84,7 +84,7 @@ class LioNav2Executor(LocalNavigation):
     def command(self,msg):
         if self.state!='ACTIVE' or not self.follow_active or self.arrival.since is not None:return
         v,w=msg.linear.x,msg.angular.z
-        if any(not math.isfinite(x) for x in (v,w)) or v<-.00001 or v>1.00001 or abs(w)>.50001:
+        if any(not math.isfinite(x) for x in (v,w)) or v<-.00001 or v>1.00001 or abs(w)>1.50001:
             self.state='STOPPED';self.reason='Invalid LIO Nav2 velocity';return
         scale=min(1.,self.speed_limits['linear_mps']/max(v,1e-9),self.speed_limits['angular_rps']/max(abs(w),1e-9))
         self.cmd=(max(0.,v)*scale,w*scale);self.cmd_rx=time.monotonic()

@@ -5,7 +5,7 @@ const field=id=>document.getElementById(id);
 field('applyNavSpeed').onclick=async()=>{
  try{
   const v=Number(field('navLinearSpeed').value),w=Number(field('navAngularSpeed').value);
-  if(!Number.isFinite(v)||!Number.isFinite(w)||v<.1||v>1||w<.1||w>.5)throw Error('前进范围0.1～1 m/s，转向范围0.1～0.5 rad/s');
+  if(!Number.isFinite(v)||!Number.isFinite(w)||v<.1||v>1||w<.1||w>1.5)throw Error('前进范围0.1～1 m/s，转向范围0.1～1.5 rad/s');
   await command('speed_limits',{linear_mps:v,angular_rps:w});
   field('navSpeedState').textContent='参数已提交，等待下方实际生效值更新';
  }catch(e){field('navSpeedState').textContent='速度设置失败：'+e.message}

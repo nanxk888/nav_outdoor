@@ -35,8 +35,8 @@ class WireTests(unittest.TestCase):
 
     def test_speed(self):
         self.assertEqual(velocity(.2,-.3),(.2,-.3))
-        self.assertEqual(velocity(1.,.5),(1.,.5))
-        for v,w in [(-.1,0),(1.01,0),(0,.51),(math.nan,0),(0,math.inf),(True,0)]:
+        self.assertEqual(velocity(1.,1.5),(1.,1.5))
+        for v,w in [(-.1,0),(1.01,0),(0,1.51),(math.nan,0),(0,math.inf),(True,0)]:
             with self.assertRaises(ValueError):velocity(v,w)
 
 

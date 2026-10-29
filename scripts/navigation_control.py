@@ -199,7 +199,7 @@ class Control:
                 self.stop('LIO local '+s['state']+': '+s.get('reason',''));return
             if s.get('state')=='ACTIVE' and self.safe():
                 v,w=velocity(s['v'],s['w'])
-                if v>1.000001 or abs(w)>.500001:raise ValueError('Local velocity exceeds configured protocol envelope')
+                if v>1.000001 or abs(w)>1.500001:raise ValueError('Local velocity exceeds configured protocol envelope')
                 if self.phase=='GOAL_PENDING':self.transition('NAVIGATING','LIO full-path execution accepted')
                 self.cmd=(v,w);self.cmd_time=time.monotonic()
         except (ValueError,TypeError,KeyError):
