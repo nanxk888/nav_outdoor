@@ -17,6 +17,7 @@ from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import String
 from d1h_nav2.observed_memory import ObservedMemory
 from d1h_nav2.footprint import path_free
+from d1h_nav2.navigation_reference import body_heading
 
 
 def stamp(msg):return msg.header.stamp.sec*10**9+msg.header.stamp.nanosec
@@ -25,8 +26,9 @@ def stamp(msg):return msg.header.stamp.sec*10**9+msg.header.stamp.nanosec
 class LioMemoryNode(Node):
     def __init__(self):
         super().__init__('lio_observed_memory')
-        for k,v in {'resolution_m':.1,'retention_sec':300.,'footprint_radius_m':.25}.items():self.declare_parameter(k,v)
+        for k,v in {'resolution_m':.1,'retention_sec':0.,'footprint_radius_m':.25,'max_cells':0}.items():self.declare_parameter(k,v)
         self.memory=ObservedMemory(self.get_parameter('resolution_m').value,self.get_parameter('retention_sec').value,
+                                   max_cells=self.get_parameter('max_cells').value,
                                    radius=self.get_parameter('footprint_radius_m').value,min_points=3,confirm_frames=2)
         self.bundles={};self.previous=None;self.frame='';self.last_scan=0;self.origin=(0.,0.);self.goal=None
         self.saved_route=None
@@ -138,7 +140,9 @@ class LioMemoryNode(Node):
                 if not -.05<=now-k/1e9<=.5 or any(m.header.frame_id!=self.frame for m in b.values()):raise ValueError('Stale/mismatched scan')
                 p=b['odom'].pose.pose.position;self.origin=(p.x,p.y)
                 observed=time.monotonic()
-                self.memory.observe(self.origin,self.points(b['nav']),self.points(b['clear']),now)
+                q=b['odom'].pose.pose.orientation
+                yaw=body_heading((q.x,q.y,q.z,q.w))
+                self.memory.observe(self.origin,self.points(b['nav']),self.points(b['clear']),now,heading=yaw)
                 self.diagnostics['observe_ms']=(time.monotonic()-observed)*1000
                 self.last_scan=k;self.scan_rx=time.monotonic();self.reason='observed-space memory updated; terrain not qualified'
                 self.bundles={t:v for t,v in self.bundles.items() if t>k}

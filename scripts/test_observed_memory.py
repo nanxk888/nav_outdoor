@@ -73,4 +73,13 @@ class MemoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):old.route((.125,.125),(2.125,.125),10,False)
 
 
+class SessionMemoryTests(unittest.TestCase):
+    def test_session_retention_and_reset(self):
+        m=ObservedMemory(retention=0,max_cells=0)
+        m.cells[(0,0)]=(100,10.)
+        m.expire(10000.)
+        self.assertEqual(m.cells[(0,0)][0],100)
+        m.expire(1.)
+        self.assertFalse(m.cells)
+
 if __name__=='__main__':unittest.main()
