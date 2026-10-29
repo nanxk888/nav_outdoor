@@ -728,9 +728,20 @@ void LIVMapper::run(rclcpp::Node::SharedPtr &node)
     executor.spin_once(std::chrono::nanoseconds(0));
     const auto steady_now = std::chrono::steady_clock::now();
     const auto seconds = [&](auto t) { return std::chrono::duration<double>(steady_now-t).count(); };
-    if (seconds(navigation_cloud_rx) > (navigation_seen_cloud ? 0.5 : 3.0) ||
+    if (waiting_sync && seconds(navigation_started) > 30.)
+      throw std::runtime_error("Initial LiDAR/IMU synchronization timed out after 30s");
+    if (!waiting_sync && (seconds(navigation_cloud_rx) > (navigation_seen_cloud ? 0.5 : 3.0) ||
         seconds(navigation_imu_rx) > (navigation_seen_imu ? 0.5 : 3.0))
+       )
       throw std::runtime_error("LiDAR/IMU missing or stale; explicit restart required");
+    if (waiting_sync && !imu_buffer.empty()) {
+      // A newly discovered IMU cannot cover scans acquired before its first sample.
+      while (!lid_header_time_buffer.empty() &&
+             (lid_header_time_buffer.front() < stamp2Sec(imu_buffer.front()->header.stamp) ||
+              this->node->now().seconds()-lid_header_time_buffer.front() > navigation_max_age)) {
+        lid_header_time_buffer.pop_front();lid_raw_data_buffer.pop_front();lidar_pushed=false;
+      }
+    }
     if (!sync_packages(LidarMeasures)) 
     {
       rate.sleep();
@@ -944,7 +955,8 @@ void LIVMapper::livox_pcl_cbk(const livox_custom_msg::CustomMsg::ConstSharedPtr 
   if (!std::isfinite(input_time) || input_time <= 0 ||
       (navigation_seen_cloud && input_time <= last_timestamp_lidar) ||
       input_age < -0.05 || input_age > navigation_max_age || msg_in->point_num > 100000 ||
-      msg_in->point_num != msg_in->points.size() || lid_raw_data_buffer.size() >= navigation_cloud_capacity)
+      msg_in->point_num != msg_in->points.size() ||
+      (navigation_output_time > 0 && lid_raw_data_buffer.size() >= navigation_cloud_capacity))
   {
     std::ostringstream error;
     error << std::setprecision(16) << "LiDAR validation failed: stamp=" << input_time
@@ -965,6 +977,10 @@ void LIVMapper::livox_pcl_cbk(const livox_custom_msg::CustomMsg::ConstSharedPtr 
   navigation_seen_cloud = true; navigation_cloud_rx = std::chrono::steady_clock::now();
   if (!lidar_en) return;
   mtx_buffer.lock();
+  // Bounded startup rolling buffer; tracking overload remains fail-stop.
+  while (navigation_output_time < 0 && lid_raw_data_buffer.size() >= navigation_cloud_capacity) {
+    lid_raw_data_buffer.pop_front();lid_header_time_buffer.pop_front();lidar_pushed=false;
+  }
   livox_custom_msg::CustomMsg::SharedPtr msg(new livox_custom_msg::CustomMsg(*msg_in));
   // if ((abs(stamp2Sec(msg->header.stamp) - last_timestamp_lidar) > 0.2 && last_timestamp_lidar > 0) || sync_jump_flag)
   // {
