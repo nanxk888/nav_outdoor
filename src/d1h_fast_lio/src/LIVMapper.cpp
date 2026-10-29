@@ -728,8 +728,13 @@ void LIVMapper::run(rclcpp::Node::SharedPtr &node)
     executor.spin_once(std::chrono::nanoseconds(0));
     const auto steady_now = std::chrono::steady_clock::now();
     const auto seconds = [&](auto t) { return std::chrono::duration<double>(steady_now-t).count(); };
-    if (waiting_sync && seconds(navigation_started) > 30.)
-      throw std::runtime_error("Initial LiDAR/IMU synchronization timed out after 30s");
+    if (waiting_sync && seconds(navigation_started) > 30.) {
+      std::ostringstream error;
+      error << "Initial LiDAR/IMU synchronization timed out after 30s; stale_imu_dropped="
+            << navigation_startup_stale_imu << " lidar_queue=" << lid_raw_data_buffer.size()
+            << " imu_queue=" << imu_buffer.size() << " latest_imu=" << last_timestamp_imu;
+      throw std::runtime_error(error.str());
+    }
     if (!waiting_sync && (seconds(navigation_cloud_rx) > (navigation_seen_cloud ? 0.5 : 3.0) ||
         seconds(navigation_imu_rx) > (navigation_seen_imu ? 0.5 : 3.0))
        )
@@ -1050,6 +1055,18 @@ void LIVMapper::imu_cbk(const sensor_msgs::msg::Imu::ConstSharedPtr &msg_in)
   const double input_age = this->node->now().seconds() - input_time;
   const V3D input_acc(msg_in->linear_acceleration.x,msg_in->linear_acceleration.y,msg_in->linear_acceleration.z);
   const V3D input_gyro(msg_in->angular_velocity.x,msg_in->angular_velocity.y,msg_in->angular_velocity.z);
+  // Discovery may deliver historical samples first. Do not let an old sample
+  // initialize the estimator, refresh stream health, or trip stationary checks.
+  // Invalid vectors/stamps and all post-initialization checks remain strict.
+  if (navigation_output_time < 0 && p_imu->imu_need_init &&
+      input_acc.allFinite() && input_gyro.allFinite() &&
+      std::isfinite(input_time) && input_time > 0 && input_age > navigation_max_age) {
+    ++navigation_startup_stale_imu;
+    if ((navigation_startup_stale_imu & (navigation_startup_stale_imu-1)) == 0)
+      std::cerr << "Navigation LIO: waiting for fresh IMU; stale samples dropped="
+                << navigation_startup_stale_imu << " latest_dropped_age_sec=" << input_age << std::endl;
+    return;
+  }
   if (p_imu->imu_need_init && input_gyro.norm() > .15)
     throw std::runtime_error("Keep sensors stationary during IMU initialization");
   if (!input_acc.allFinite() || !input_gyro.allFinite() || !std::isfinite(input_time) ||

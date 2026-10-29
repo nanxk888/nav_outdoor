@@ -104,6 +104,7 @@ public:
   std::chrono::steady_clock::time_point navigation_cloud_rx = navigation_started;
   std::chrono::steady_clock::time_point navigation_imu_rx = navigation_started;
   bool navigation_seen_cloud = false, navigation_seen_imu = false;
+  size_t navigation_startup_stale_imu = 0;
   double navigation_output_time = -1.0;
   double navigation_max_age = 0.5;
   static constexpr size_t navigation_cloud_capacity = 6;
