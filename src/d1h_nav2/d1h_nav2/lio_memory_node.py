@@ -26,6 +26,8 @@ def stamp(msg):return msg.header.stamp.sec*10**9+msg.header.stamp.nanosec
 class LioMemoryNode(Node):
     def __init__(self):
         super().__init__('lio_observed_memory')
+        self.declare_parameter('rear_blind_deg',180.)
+        self.declare_parameter('near_obstacle_protect_m',.6)
         for k,v in {'resolution_m':.1,'retention_sec':0.,'footprint_radius_m':.25,'max_cells':0}.items():self.declare_parameter(k,v)
         self.memory=ObservedMemory(self.get_parameter('resolution_m').value,self.get_parameter('retention_sec').value,
                                    max_cells=self.get_parameter('max_cells').value,
@@ -142,7 +144,9 @@ class LioMemoryNode(Node):
                 observed=time.monotonic()
                 q=b['odom'].pose.pose.orientation
                 yaw=body_heading((q.x,q.y,q.z,q.w))
-                self.memory.observe(self.origin,self.points(b['nav']),self.points(b['clear']),now,heading=yaw)
+                self.memory.observe(self.origin,self.points(b['nav']),self.points(b['clear']),now,heading=yaw,
+                    rear_blind_deg=self.get_parameter('rear_blind_deg').value,
+                    near_obstacle_protect_m=self.get_parameter('near_obstacle_protect_m').value)
                 self.diagnostics['observe_ms']=(time.monotonic()-observed)*1000
                 self.last_scan=k;self.scan_rx=time.monotonic();self.reason='observed-space memory updated; terrain not qualified'
                 self.bundles={t:v for t,v in self.bundles.items() if t>k}

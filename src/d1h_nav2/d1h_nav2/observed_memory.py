@@ -23,7 +23,7 @@ class ObservedMemory:
         if self.retention:
             self.cells={c:v for c,v in self.cells.items() if 0<=now-v[1]<self.retention}
 
-    def observe(self,origin,obstacles,returns,now,max_range=6.,heading=None,rear_blind_deg=120.):
+    def observe(self,origin,obstacles,returns,now,max_range=6.,heading=None,rear_blind_deg=180.,near_obstacle_protect_m=.6):
         """Observed rays only; no return is NOT free. All obstacles dominate this scan.
 
         This is planar line-of-sight evidence, NOT terrain/pit traversability proof.
@@ -56,6 +56,13 @@ class ObservedMemory:
                 c=(round(start[0]+(end[0]-start[0])*i/count),round(start[1]+(end[1]-start[1])*i/count))
                 if c in raw:break
                 if blind(self.point(c)):continue
+                # A projected 2-D ray may pass above a close object: absence of
+                # a current hit is not evidence that the object disappeared.
+                # Stop the ray as well, so it cannot clear space behind it.
+                if (self.cells.get(c,(0,0))[0]==100 and
+                    math.dist(origin[:2],self.point(c))<=near_obstacle_protect_m):
+                    self.free_hits.pop(c,None)
+                    break
                 if c in cleared:continue
                 cleared.add(c)
                 if self.cells.get(c,(0,0))[0]==100:

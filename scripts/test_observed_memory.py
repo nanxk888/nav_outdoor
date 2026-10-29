@@ -74,6 +74,17 @@ class MemoryTests(unittest.TestCase):
 
 
 class SessionMemoryTests(unittest.TestCase):
+    def test_near_obstacle_not_cleared_by_overhead_ray(self):
+        m=ObservedMemory(resolution=.1,retention=0)
+        m.cells[(0,4)]=(100,1.)
+        for t in range(2,6):m.observe((0,0),[],[(0,2)],t,heading=0)
+        self.assertEqual(m.cells[(0,4)][0],100)
+    def test_rear_half_plane_preserved(self):
+        m=ObservedMemory(resolution=.1,retention=0)
+        m.cells[(-5,8)]=(100,1.)
+        for t in range(2,6):m.observe((0,0),[],[(-1,1.6)],t,heading=0)
+        self.assertEqual(m.cells[(-5,8)][0],100)
+
     def test_session_retention_and_reset(self):
         m=ObservedMemory(retention=0,max_cells=0)
         m.cells[(0,0)]=(100,10.)
