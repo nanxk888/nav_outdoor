@@ -75,10 +75,14 @@ class ObservedMemory:
     def route(self,start,goal,now,explore=True,max_expand=20000):
         self.expire(now);s=self.cell(start);g=self.cell(goal)
         r=math.ceil(self.radius/self.resolution)
+        def position(c):
+            return tuple(start[:2]) if c==s else (tuple(goal[:2]) if c==g else self.point(c))
+        def segment_free(a,b):
+            return path_free([a,b],self.resolution,self.radius,lambda c:self.cells.get(c,(-1,0))[0]==0)
         cache={}
         def free(c):
             if c not in cache:
-                cache[c]=all(self.cells.get(k,(-1,0))[0]==0 for k in circle_cells(self.point(c),self.resolution,self.radius))
+                cache[c]=all(self.cells.get(k,(-1,0))[0]==0 for k in circle_cells(position(c),self.resolution,self.radius))
             return cache[c]
         bad=[(c,self.cells.get(c,(-1,0))[0]) for c in circle_cells(start,self.resolution,self.radius)
              if self.cells.get(c,(-1,0))[0]!=0]
@@ -101,6 +105,7 @@ class ObservedMemory:
                 n=(c[0]+dx,c[1]+dy)
                 if not free(n):continue
                 if dx and dy and (not free((c[0]+dx,c[1])) or not free((c[0],c[1]+dy))):continue
+                if (c==s or n==g) and not segment_free(position(c),position(n)):continue
                 new=cost+math.hypot(dx,dy)
                 if new<costs.get(n,math.inf):
                     costs[n]=new;parent[n]=c;heapq.heappush(queue,(new+math.dist(n,g),new,n))
@@ -109,13 +114,16 @@ class ObservedMemory:
         chain=[best]
         while chain[-1]!=s:chain.append(parent[chain[-1]])
         if len(chain)>4000:raise ValueError('Path point budget exceeded; no candidate released')
-        points=[self.point(c) for c in reversed(chain)]
+        points=[position(c) for c in reversed(chain)]
         # Preserve actual endpoints, rather than stopping at a quantized cell centre.
         points=[tuple(start[:2])]+points+([tuple(goal[:2])] if reached else [])
         def segment_free(a,b):
             return path_free([a,b],self.resolution,self.radius,lambda c:self.cells.get(c,(-1,0))[0]==0)
         def valid(path):return all(segment_free(a,b) for a,b in zip(path,path[1:]))
-        if not valid(points):raise ValueError('Exact endpoint footprint blocked or unknown')
+        if not valid(points):
+            for index,(a,b) in enumerate(zip(points,points[1:])):
+                if not segment_free(a,b):
+                    raise ValueError(f'Path footprint blocked/unknown: segment={index} from={a} to={b} radius={self.radius}')
         # Remove grid stair-steps locally, then round corners (Chaikin). Never
         # release a smoothed shortcut unless its swept footprint remains free.
         simplified=[points[0]];index=0
