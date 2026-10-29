@@ -74,6 +74,19 @@ class MemoryTests(unittest.TestCase):
 
 
 class SessionMemoryTests(unittest.TestCase):
+    def test_front_cone_can_clear_close_obstacle(self):
+        m=ObservedMemory(resolution=.1,retention=0)
+        m.cells[(4,0)]=(100,1.)
+        m.observe((0,0),[],[(2,0)],2,heading=0)
+        self.assertEqual(m.cells[(4,0)][0],100)
+        m.observe((0,0),[],[(2,0)],3,heading=0)
+        self.assertEqual(m.cells[(4,0)][0],0)
+    def test_front_inner_13cm_remains_protected(self):
+        m=ObservedMemory(resolution=.1,retention=0)
+        m.cells[(0,0)]=(100,1.)
+        for t in range(2,6):m.observe((0,0),[],[(2,0)],t,heading=0)
+        self.assertEqual(m.cells[(0,0)][0],100)
+
     def test_near_obstacle_not_cleared_by_overhead_ray(self):
         m=ObservedMemory(resolution=.1,retention=0)
         m.cells[(0,4)]=(100,1.)

@@ -37,6 +37,11 @@ class ObservedMemory:
             a=math.atan2(p[1]-origin[1],p[0]-origin[0])-heading-math.pi
             return abs(math.atan2(math.sin(a),math.cos(a)))<=math.radians(rear_blind_deg/2)
         def allowed(p):return all(math.isfinite(v) for v in p[:2]) and math.dist(origin[:2],p[:2])<=max_range
+        def front_clearable(p):
+            if heading is None:return False
+            dx,dy=p[0]-origin[0],p[1]-origin[1]
+            a=math.atan2(dy,dx)-heading
+            return math.hypot(dx,dy)>.13 and abs(math.atan2(math.sin(a),math.cos(a)))<=math.radians(30)
         counts={}
         for p in obstacles:
             if allowed(p):
@@ -60,7 +65,8 @@ class ObservedMemory:
                 # a current hit is not evidence that the object disappeared.
                 # Stop the ray as well, so it cannot clear space behind it.
                 if (self.cells.get(c,(0,0))[0]==100 and
-                    math.dist(origin[:2],self.point(c))<=near_obstacle_protect_m):
+                    math.dist(origin[:2],self.point(c))<=near_obstacle_protect_m and
+                    not front_clearable(self.point(c))):
                     self.free_hits.pop(c,None)
                     break
                 if c in cleared:continue
