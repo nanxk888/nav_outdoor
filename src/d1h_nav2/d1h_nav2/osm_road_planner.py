@@ -18,7 +18,7 @@ from nav2_msgs.action import ComputePathToPose
 from nav2_msgs.srv import IsPathValid
 from tf2_ros import Buffer, TransformListener
 from d1h_nav2.osm_roads import RoadGraph, sample
-from d1h_nav2.footprint import circle_cells
+from d1h_nav2.footprint import body_cells
 
 
 class OsmRoadPlanner(Node):
@@ -109,8 +109,10 @@ class OsmRoadPlanner(Node):
             res=grid.info.resolution
             if not .1<=res<=1 or len(grid.data)!=grid.info.width*grid.info.height:return False
             ox,oy=grid.info.origin.position.x,grid.info.origin.position.y
-            for p in sample(convert(a),convert(b),res/8):
-                for ix,iy in circle_cells(p,res,self.access_width,(ox,oy)):
+            ca,cb=convert(a),convert(b)
+            heading=math.atan2(cb[1]-ca[1],cb[0]-ca[0])
+            for p in sample(ca,cb,res/8):
+                for ix,iy in body_cells(p,res,heading,(ox,oy)):
                     if not (0<=ix<grid.info.width and 0<=iy<grid.info.height) or grid.data[iy*grid.info.width+ix]!=0:return False
             return True
         except Exception:return False

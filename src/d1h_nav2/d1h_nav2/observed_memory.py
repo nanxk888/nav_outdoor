@@ -2,7 +2,7 @@
 import heapq
 import math
 import time
-from d1h_nav2.footprint import circle_cells,path_free
+from d1h_nav2.footprint import circle_cells,path_free,body_cells,body_path_free
 
 
 class ObservedMemory:
@@ -12,7 +12,7 @@ class ObservedMemory:
         self.resolution=resolution;self.retention=retention;self.max_cells=max_cells;self.radius=radius
         self.cells={};self.time=None
         self.min_points=min_points;self.confirm_frames=confirm_frames;self.hits={};self.free_hits={}
-        self.body_only=set()
+        self.body_only=set();self.heading=None
 
     def cell(self,p):return (math.floor(p[0]/self.resolution),math.floor(p[1]/self.resolution))
     def point(self,c):return ((c[0]+.5)*self.resolution,(c[1]+.5)*self.resolution)
@@ -30,7 +30,7 @@ class ObservedMemory:
         Ray budgets are bounded separately from sparse stored cells.
         """
         for c in self.body_only:self.cells.pop(c,None)
-        self.body_only.clear()
+        self.body_only.clear();self.heading=heading
         self.expire(now)
         def blind(p):
             if heading is None:return False
@@ -65,7 +65,7 @@ class ObservedMemory:
         for c in occupied:self.cells[c]=(100,now);self.free_hits.pop(c,None)
         # Transient current-body support, never an observed-free trail or obstacle eraser.
         if heading is not None:
-            for c in circle_cells(origin,self.resolution,self.radius):
+            for c in body_cells(origin,self.resolution,heading):
                 if c not in self.cells and c not in raw:
                     self.cells[c]=(0,now);self.body_only.add(c)
         self.free_hits={c:n for c,n in self.free_hits.items() if c in cleared and self.cells.get(c,(0,0))[0]==100}
@@ -75,16 +75,17 @@ class ObservedMemory:
     def route(self,start,goal,now,explore=True,max_expand=20000):
         self.expire(now);s=self.cell(start);g=self.cell(goal)
         r=math.ceil(self.radius/self.resolution)
+        cells=lambda p:body_cells(p,self.resolution,self.heading) if self.heading is not None else circle_cells(p,self.resolution,self.radius)
         def position(c):
             return tuple(start[:2]) if c==s else (tuple(goal[:2]) if c==g else self.point(c))
         def segment_free(a,b):
-            return path_free([a,b],self.resolution,self.radius,lambda c:self.cells.get(c,(-1,0))[0]==0)
+            return (body_path_free([a,b],self.resolution,lambda c:self.cells.get(c,(-1,0))[0]==0) if self.heading is not None else path_free([a,b],self.resolution,self.radius,lambda c:self.cells.get(c,(-1,0))[0]==0))
         cache={}
         def free(c):
             if c not in cache:
-                cache[c]=all(self.cells.get(k,(-1,0))[0]==0 for k in circle_cells(position(c),self.resolution,self.radius))
+                cache[c]=all(self.cells.get(k,(-1,0))[0]==0 for k in cells(position(c)))
             return cache[c]
-        bad=[(c,self.cells.get(c,(-1,0))[0]) for c in circle_cells(start,self.resolution,self.radius)
+        bad=[(c,self.cells.get(c,(-1,0))[0]) for c in cells(start)
              if self.cells.get(c,(-1,0))[0]!=0]
         if bad:raise ValueError('Start footprint blocked: radius=%.2fm unknown=%d occupied=%d cells=%s' %
                                (self.radius,sum(v<0 for _,v in bad),sum(v>0 for _,v in bad),bad))
@@ -118,7 +119,7 @@ class ObservedMemory:
         # Preserve actual endpoints, rather than stopping at a quantized cell centre.
         points=[tuple(start[:2])]+points+([tuple(goal[:2])] if reached else [])
         def segment_free(a,b):
-            return path_free([a,b],self.resolution,self.radius,lambda c:self.cells.get(c,(-1,0))[0]==0)
+            return (body_path_free([a,b],self.resolution,lambda c:self.cells.get(c,(-1,0))[0]==0) if self.heading is not None else path_free([a,b],self.resolution,self.radius,lambda c:self.cells.get(c,(-1,0))[0]==0))
         def valid(path):return all(segment_free(a,b) for a,b in zip(path,path[1:]))
         if not valid(points):
             for index,(a,b) in enumerate(zip(points,points[1:])):

@@ -16,7 +16,7 @@ from nav_msgs.msg import Odometry,OccupancyGrid,Path
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import String
 from d1h_nav2.observed_memory import ObservedMemory
-from d1h_nav2.footprint import path_free
+from d1h_nav2.footprint import path_free,body_path_free
 from d1h_nav2.navigation_reference import body_heading
 
 
@@ -65,7 +65,7 @@ class LioMemoryNode(Node):
         if previous and previous.get('partial') is False:
             points=previous['points'];index=min(range(len(points)),key=lambda i:math.dist(origin,points[i]))
             remaining=[origin]+points[index:]
-            if math.dist(origin,points[index])<=.4 and path_free(remaining,memory.resolution,memory.radius,
+            if math.dist(origin,points[index])<=.4 and body_path_free(remaining,memory.resolution,
                 lambda c:memory.cells.get(c,(-1,0))[0]==0):return dict(previous,points=remaining)
         return memory.route(origin,goal,now)
 

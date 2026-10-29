@@ -33,11 +33,18 @@ class PatchworkGround:
             num_sectors_each_zone=[16,24,32,32],num_rings_each_zone=[2,2,2,2],RNR=False,RVPF=True,TGR=True,
             input_frame='gravity-aligned LIO; translated to IMU; virtual z height normalization')
 
-    def split(self,points,origin):
+    def split(self,points,origin,heading=None):
         started=time.monotonic();p=np.asarray(points,dtype=np.float32);o=np.asarray(origin,dtype=float)
         if p.ndim!=2 or p.shape[1]!=3 or not np.isfinite(o).all():raise ValueError('Invalid Patchwork++ XYZ/origin')
         p=p[np.isfinite(p).all(axis=1)]
-        distance=np.linalg.norm(p-o,axis=1);p=p[(distance>=.6)&(distance<=self.max_range)]
+        distance=np.linalg.norm(p-o,axis=1)
+        if heading is None:
+            outside=distance>=.6  # Legacy callers without measured body attitude.
+        else:
+            dx=p[:,0]-o[0];dy=p[:,1]-o[1];c=math.cos(heading);s=math.sin(heading)
+            forward=dx*c+dy*s;left=-dx*s+dy*c
+            outside=~((forward>=-.25)&(forward<=.13)&(np.abs(left)<=.23))
+        p=p[outside&(distance<=self.max_range)]
         if len(p)<60:raise ValueError('Patchwork++ insufficient input points')
         floor=o[2]-self.initial_height if self.floor_z is None else self.floor_z
         height=o[2]-floor

@@ -1,3 +1,4 @@
+from d1h_nav2.footprint import BODY_POLYGON
 """GPS-independent, namespaced observed-space Smac + RPP backend."""
 import copy
 import os
@@ -28,7 +29,7 @@ def configure(context):
     # Occupied, cleared and UNKNOWN evidence comes from the same live memory
     # grid used by the execution checks. Do not ray-clear unknown into free.
     costmap=dict(use_sim_time=False,global_frame='lio_odom',robot_base_frame='lio_navigation_base',
-        rolling_window=True,width=12,height=12,resolution=.1,robot_radius=.25,footprint_padding=0.,
+        rolling_window=True,width=12,height=12,resolution=.1,footprint=BODY_POLYGON,footprint_padding=0.,
         track_unknown_space=True,update_frequency=5.,publish_frequency=5.,transform_tolerance=.25,
         always_send_full_costmap=True,plugins=['observed_space','inflation_layer'],
         observed_space=dict(plugin='nav2_costmap_2d::StaticLayer',map_topic='/navigation/memory/grid',

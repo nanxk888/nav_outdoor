@@ -10,6 +10,7 @@ from sensor_msgs.msg import PointCloud2,PointField
 from sensor_msgs_py import point_cloud2
 from std_msgs.msg import String
 from d1h_nav2.patchwork_ground import PatchworkGround
+from d1h_nav2.navigation_reference import body_heading
 from d1h_nav2.ground_health import STATUS_PERIOD_SEC
 
 
@@ -74,7 +75,8 @@ class RealCloudFilter(Node):
             else:points=np.asarray(list(raw),dtype=float).reshape(-1,3)
             if len(points)>100000:raise ValueError('scan exceeds bounded 100k-point budget')
             t=odom.pose.pose.position
-            nav,clear,plane=self.filter.split(points,(t.x,t.y,t.z))
+            q=odom.pose.pose.orientation
+            nav,clear,plane=self.filter.split(points,(t.x,t.y,t.z),body_heading((q.x,q.y,q.z,q.w)))
             fields=[PointField(name=n,offset=i*4,datatype=PointField.FLOAT32,count=1) for i,n in enumerate(('x','y','z'))]
             def output(xyz):
                 out=PointCloud2();out.header=msg.header;out.height=1;out.width=len(xyz);out.fields=fields

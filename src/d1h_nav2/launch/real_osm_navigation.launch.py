@@ -1,3 +1,4 @@
+from d1h_nav2.footprint import BODY_POLYGON
 """Real-robot planning ONLY. Hardware/localization/filtering are external prerequisites.
 
 No simulator nodes, fake localization, or actuator bridge are launched here.
@@ -29,7 +30,7 @@ def configure(context):
             for key,item in list(value.items()):
                 if key=='robot_base_frame':value[key]='navigation_base'
                 elif key=='sensor_frame':value[key]='navigation_sensor'
-                elif key=='robot_radius':value[key]=.25;value['footprint_padding']=0.
+                elif key=='robot_radius':value[key]=.25;value['footprint']=BODY_POLYGON;value['footprint_padding']=0.
                 elif key=='use_sim_time':value[key]=False
                 else:commissioning(item)
         elif isinstance(value,list):
@@ -41,7 +42,7 @@ def configure(context):
         for name in ('global_costmap','local_costmap'):
             if name in config:
                 params=config[name][name]['ros__parameters']
-                params['robot_radius']=.25
+                params['footprint']=BODY_POLYGON
                 params['footprint_padding']=0.
     real_nav['bt_navigator']['ros__parameters']['default_nav_through_poses_bt_xml']=''
     follower=real_nav['controller_server']['ros__parameters']['FollowPath']

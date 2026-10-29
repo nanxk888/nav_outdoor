@@ -14,7 +14,7 @@ from tf2_ros import TransformBroadcaster
 from d1h_nav2.local_navigation_node import LocalNavigation
 from d1h_nav2.local_navigation import speed_limits
 from d1h_nav2.navigation_reference import body_heading
-from d1h_nav2.footprint import path_free
+from d1h_nav2.footprint import path_free,body_path_free
 from d1h_nav2.arrival import Arrival,approach_cap
 from d1h_nav2.heading_align import HeadingAlign
 
@@ -111,7 +111,7 @@ class LioNav2Executor(LocalNavigation):
 
     def valid(self,points):
         g=self.grid;r=g.info.resolution;ox,oy=g.info.origin.position.x,g.info.origin.position.y
-        return path_free([(x-ox,y-oy) for x,y in points],r,.25,self.free)
+        return body_path_free([(x-ox,y-oy) for x,y in points],r,self.free)
 
     def plan(self,position):
         self.plan_busy=True;self.next_plan=time.monotonic()+.2;run=self.run_id
