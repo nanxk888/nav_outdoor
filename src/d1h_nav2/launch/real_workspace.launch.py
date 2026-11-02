@@ -61,15 +61,22 @@ def configure(context):
         if not Path(p.get('osm_file','')).is_absolute() or not Path(p['osm_file']).is_file():
             raise RuntimeError('Nav profile osm_file must exist at an absolute path')
     if enabled('with_gps_driver'):
+        if arg('gps_source_mode')!='legacy96':
+            raise RuntimeError('with_gps_driver manages the legacy driver only; use with_gps_driver:=false for externally managed Meridian GPS')
         guard=ExecuteProcess(cmd=[sys.executable,str(root/'scripts/ensure_real_gnss_driver.py'),
             '--root',arg('gps_driver_root'),'--config',arg('gps_driver_config'),
             '--cyclonedds',arg('gps_cyclonedds_xml')],output='screen',name='gps_driver_guard')
         critical.append(guard)
     if enabled('with_gps_bridge'):
-        bridge=ExecuteProcess(cmd=[str(Path(get_package_prefix('domain_bridge'))/'lib/domain_bridge/domain_bridge'),
-            str(root/'map/gnss_bridge.yaml')],output='screen',
-            additional_env={'RMW_IMPLEMENTATION':'rmw_cyclonedds_cpp','CYCLONEDDS_URI':xml.as_uri()},
-            name='gps_domain_bridge')
+        if arg('gps_source_mode')=='meridian0':
+            bridge=Node(package='d1h_nav2',executable='gnss_topic_adapter',name='nxk_gnss_topic_adapter',
+                parameters=[{'use_sim_time':False,'input_topic':arg('gps_input_topic')}],output='screen')
+        elif arg('gps_source_mode')=='legacy96':
+            bridge=ExecuteProcess(cmd=[str(Path(get_package_prefix('domain_bridge'))/'lib/domain_bridge/domain_bridge'),
+                str(root/'map/gnss_bridge.yaml')],output='screen',
+                additional_env={'RMW_IMPLEMENTATION':'rmw_cyclonedds_cpp','CYCLONEDDS_URI':xml.as_uri()},
+                name='gps_domain_bridge')
+        else:raise RuntimeError('gps_source_mode must be meridian0 or legacy96')
         critical.append(bridge)
     if enabled('with_lio') or enabled('with_livox_driver'):
         command=[sys.executable,str(root/'scripts/ensure_livox_and_lio.py'),
@@ -138,7 +145,9 @@ def generate_launch_description():
         DeclareLaunchArgument('domain',default_value='0'),
         DeclareLaunchArgument('log_level',default_value='error'),
         DeclareLaunchArgument('control_config',default_value='',description='Optional private UDP connection config; empty disables robot control'),
-        DeclareLaunchArgument('with_gps_driver',default_value='true'),
+        DeclareLaunchArgument('with_gps_driver',default_value='false'),
+        DeclareLaunchArgument('gps_source_mode',default_value='meridian0',description='meridian0 topic adapter or legacy96 domain bridge; mutually exclusive'),
+        DeclareLaunchArgument('gps_input_topic',default_value='/meridian/observation/gnss/fix'),
         DeclareLaunchArgument('gps_driver_root',default_value='/workspace/d1h-autonomy-final'),
         DeclareLaunchArgument('gps_driver_config',default_value='/workspace/d1h-autonomy-final/.local/robot/perception/gnss.yaml'),
         DeclareLaunchArgument('with_gps_bridge',default_value='true'),

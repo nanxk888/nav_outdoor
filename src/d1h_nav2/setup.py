@@ -30,6 +30,7 @@ setup(
         'navigation_reference = d1h_nav2.navigation_reference_node:main',
         'local_navigation = d1h_nav2.lio_nav2_executor:main',
         'nav2_speed_sync = d1h_nav2.nav2_speed_sync:main',
+        'gnss_topic_adapter = d1h_nav2.gnss_topic_adapter:main',
         'pose_goal_to_nav = d1h_nav2.pose_goal_to_nav:main',
         'robot_position_marker = d1h_nav2.robot_position_marker:main',
         'spawn_unknown_obstacle = d1h_nav2.spawn_unknown_obstacle:main',

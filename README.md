@@ -63,6 +63,23 @@ OSM → 道路图A* → 稳定路径缓存 → 滚动5m Smac → RPP / smoother 
 
 ## 设备接线与通信
 
+### 当前Meridian GPS接入更新
+
+统一启动现默认 `with_gps_driver:=false gps_source_mode:=meridian0`，复用外部Domain0驱动；`gnss_topic_adapter`把 `/meridian/observation/gnss/fix` 原样转发到 `/hardware/gnss/fix`。它不启动GPS硬件驱动、不修改fix/NaN/时间/协方差。室内status=-1仍是无定位，但内部消费者能区分收到消息与完全没消息。
+
+旧Domain96部署显式使用 `gps_source_mode:=legacy96`；仅在需要管理旧驱动且配置路径核对后加 `with_gps_driver:=true`。两种接入互斥，不同时向内部fix话题发布。后文提到Domain96的说明是旧模式，不再是新版默认。
+
+```bash
+# 当前Meridian部署，先更新并重建d1h_nav2
+colcon build --symlink-install --packages-select d1h_nav2 --executor sequential
+source install/local_setup.bash
+bash scripts/launch_real_workspace.sh \
+  sensor_height_m:=0.46 \
+  gps_cyclonedds_xml:=/workspace/D1h/d1h-autonomy/.local/robot/perception/cyclonedds.xml \
+  with_gps_driver:=false gps_source_mode:=meridian0 \
+  with_nav:=true control_config:=/root/.config/nxk/control.json
+```
+
 | 设备或连接 | 当前约定 |
 |---|---|
 | MID360及内置IMU | 通过以太网UDP接入USB RTL8152网卡，通常Orin `eth1` |
