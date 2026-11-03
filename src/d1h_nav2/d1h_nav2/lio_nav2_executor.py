@@ -16,7 +16,6 @@ from d1h_nav2.local_navigation import speed_limits
 from d1h_nav2.navigation_reference import body_heading
 from d1h_nav2.footprint import path_free,body_path_free
 from d1h_nav2.arrival import Arrival,approach_cap
-from d1h_nav2.heading_align import HeadingAlign
 
 
 class LioNav2Executor(LocalNavigation):
@@ -31,7 +30,7 @@ class LioNav2Executor(LocalNavigation):
         self.speed_mismatch_since=None
         self.plan_error=''
         self.arrival=Arrival();self.arrival_stage='TRACKING'
-        self.aligner=HeadingAlign();self.motion_phase='WAIT_PATH'
+        self.motion_phase='WAIT_PATH'
         self.subs.extend([self.create_subscription(String,'/lio_navigation/speed_status',self.backend_status,1),
                           self.create_subscription(String,'/navigation/speed_limits',self.limits_input,1),
                           self.create_subscription(Twist,'/lio_navigation/cmd_vel',self.command,1)])
@@ -100,7 +99,7 @@ class LioNav2Executor(LocalNavigation):
         super().request(msg)
         if self.state=='ACTIVE' and (old_state!='ACTIVE' or self.run_id!=old_run):
             self.arrival=Arrival();self.arrival_stage='TRACKING'
-            self.aligner=HeadingAlign();self.motion_phase='WAIT_PATH'
+            self.motion_phase='WAIT_PATH'
             self.reference=list(self.path);self.plan_points=[];self.plan_error='';self.next_plan=0.;self.blocked_since=time.monotonic()
             self.reason='Computing rolling Smac path; RPP waiting'
         elif old_state=='ACTIVE' and self.state!='ACTIVE':self.cancel_backend()
@@ -130,7 +129,6 @@ class LioNav2Executor(LocalNavigation):
         def planned(f):
             if self.run_id!=run or self.state!='ACTIVE' or self.arrival.since is not None:return
             self.plan_busy=False
-            if self.aligner.active:return  # Keep the accepted turn path stable.
             try:
                 result=f.result()
                 if result.status!=4 or not result.result.path.poses:raise ValueError('Smac found no current local path')
@@ -151,7 +149,7 @@ class LioNav2Executor(LocalNavigation):
                     self.follow_handle=h;self.follow_active=True
                     def finished(result_future):
                         if run==self.run_id and revision==self.follow_revision:
-                            self.follow_active=False;self.next_plan=0.;self.aligner.active=False
+                            self.follow_active=False;self.next_plan=0.
                             try:
                                 if result_future.result().status!=4:self.plan_error='RPP跟踪结束，重新规划'
                             except Exception:self.plan_error='RPP结果不可用，重新规划'
@@ -191,10 +189,8 @@ class LioNav2Executor(LocalNavigation):
                     elif self.arrival_stage in ('OVERSHOOT','TIMEOUT'):
                         raise ValueError('到站停车异常：越出0.25米范围或5秒未确认静止，请人工检查')
                 else:
-                    aligning=self.aligner.update(position,yaw,self.plan_points) if self.follow_active else False
-                    if not self.follow_active:self.aligner.active=False
-                    self.motion_phase='ALIGN_HEADING' if aligning else 'FOLLOW_PATH'
-                    if not aligning and not self.plan_busy and now>=self.next_plan:self.plan(position)
+                    self.motion_phase='FOLLOW_PATH'
+                    if not self.plan_busy and now>=self.next_plan:self.plan(position)
                     points=[]
                     if self.plan_points:
                         k=min(range(len(self.plan_points)),key=lambda i:math.dist(position,self.plan_points[i]))
@@ -204,13 +200,15 @@ class LioNav2Executor(LocalNavigation):
                         v,w=self.cmd
                         scale=min(1.,approach_cap(distance)/max(v,1e-9));v*=scale;w*=scale
                         self.blocked_since=None;self.reason='接近目标：减速中' if distance<.8 else '正在导航：Smac规划／RPP跟踪'
-                        if aligning:
-                            v=0.;self.reason='原地对准路径：误差%.1f°，禁止前进' % math.degrees(self.aligner.error)
+                        # Display only: RPP owns the rotate/translate transition.
+                        # Do not clamp v or latch a second heading controller.
+                        if abs(v)<1e-4 and abs(w)>1e-3:
+                            self.motion_phase='RPP_ROTATING';self.reason='RPP原地转向中'
                     else:
                         v=w=0.;self.reason='Holding zero; '+(self.plan_error or 'waiting for valid Smac path/RPP velocity')
                         if self.blocked_since is None:self.blocked_since=now
                         self.reason='等待通路／重新规划：'+(self.plan_error or '等待RPP速度')
-                        self.motion_phase='ALIGN_WAIT' if aligning else 'WAIT_PATH'
+                        self.motion_phase='WAIT_PATH'
         except (ValueError,TypeError,KeyError,OverflowError) as exc:
             input_reason=str(exc)
             self.reason=str(exc)
@@ -223,7 +221,7 @@ class LioNav2Executor(LocalNavigation):
             state=self.state,reason=self.reason,input_reason=input_reason,run_id=self.run_id,epoch=self.memory.get('epoch'),goal=self.memory.get('goal'),
             v=v,w=w,speed_limits=self.speed_limits,gps_required=False,controller='Nav2 RPP',planner='SmacPlanner2D',
             plan=self.plan_points if self.state=='ACTIVE' else [],main_path=self.reference,
-            arrival_stage=self.arrival_stage,motion_phase=self.motion_phase,heading_error_deg=math.degrees(self.aligner.error),
+            arrival_stage=self.arrival_stage,motion_phase=self.motion_phase,heading_error_deg=None,
             memory_diagnostics=self.memory_diagnostics,
             goal_distance_m=math.dist(position,self.target) if self.target and 'position' in locals() else None))))
 

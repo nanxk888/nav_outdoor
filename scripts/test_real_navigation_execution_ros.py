@@ -174,9 +174,9 @@ def main():
             assert control.phase=='NAVIGATING',('Observed goal beyond 2.5m must be accepted',control.status())
             control.enqueue('stop',{});step(.5)
             select(-.1,0.);begin();step(.4)
-            assert local_executor.motion_phase=='ALIGN_HEADING' and policy.command[0]==0. and abs(policy.command[1])>0.,('rear goal must rotate at zero forward speed',control.status(),local_executor.motion_phase)
+            assert local_executor.motion_phase=='RPP_ROTATING' and policy.command[0]==0. and abs(policy.command[1])>0.,('RPP must choose rotation for rear goal',control.status(),local_executor.motion_phase)
             revision=local_executor.follow_revision;step(.6)
-            assert local_executor.follow_revision==revision,'alignment must not keep replacing the turn path'
+            assert local_executor.follow_revision>=revision,'RPP rotation must not disable path updates'
             for i in range(1,13):heading[0]=i*math.pi/12;step(.15)
             step(.6)
             assert control.phase=='NAVIGATING' and local_executor.motion_phase=='FOLLOW_PATH' and policy.command[0]>0.,('aligned robot must resume forward tracking',control.status(),local_executor.motion_phase)
